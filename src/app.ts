@@ -5,6 +5,7 @@ import { env } from './config/env';
 import { authRouter } from './routes/auth';
 import { modelsRouter } from './routes/models';
 import { chatRouter } from './routes/chat';
+import { conversationsRouter } from './routes/conversations';
 import { requireAuth, requireVerified } from './middleware/auth';
 
 const app = express();
@@ -49,6 +50,7 @@ app.use('/api/auth', authRouter);
 
 app.use('/api/models', requireAuth, requireVerified, modelsRouter);
 app.use('/api/chat', requireAuth, requireVerified, chatRouter);
+app.use('/api/conversations', requireAuth, requireVerified, conversationsRouter);
 
 // ─── Error Handler Global ────────────────────────────────────────────────────
 
