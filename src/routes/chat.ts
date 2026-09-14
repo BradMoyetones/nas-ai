@@ -18,7 +18,7 @@ router.post('/', async (req: Request, res: Response) => {
     }
 
     // Si no se envía modelId, elegimos un modelo por defecto (ej. llama-3.1-8b-instant de groq)
-    const targetModelId = modelId || 'llama-3.1-8b-instant';
+    const targetModelId = modelId || 'llama-3.3-70b-versatile';
     const selectedModel = getModelById(targetModelId);
 
     if (!selectedModel) {

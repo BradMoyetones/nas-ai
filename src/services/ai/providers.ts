@@ -2,7 +2,7 @@ export interface AIModel {
     id: string;
     name: string;
     description: string;
-    icon: string; // Puede mapear a un icono en el frontend (ej. Lucide Icons: 'Bot', 'Zap', 'Sparkles')
+    icon: string;
     provider: 'openrouter' | 'groq' | 'cerebras';
 }
 
@@ -16,17 +16,24 @@ export const modelCatalog: AICategory[] = [
         category: 'Groq (Ultra-Fast)',
         models: [
             {
-                id: 'llama-3.1-8b-instant',
-                name: 'Llama 3.1 8B',
-                description: 'Rápido y capaz para tareas generales',
+                id: 'llama-3.3-70b-versatile',
+                name: 'Llama 3.3 70B',
+                description: 'Modelo versátil de alto rendimiento para tareas complejas',
                 icon: 'Zap',
                 provider: 'groq',
             },
             {
-                id: 'mixtral-8x7b-32768',
-                name: 'Mixtral 8x7B',
-                description: 'Potente modelo Mixture of Experts',
-                icon: 'Layers',
+                id: 'qwen-qwq-32b',
+                name: 'Qwen QWQ 32B',
+                description: 'Modelo de razonamiento profundo y análisis',
+                icon: 'Brain',
+                provider: 'groq',
+            },
+            {
+                id: 'gemma2-9b-it',
+                name: 'Gemma 2 9B',
+                description: 'Modelo ligero y eficiente de Google',
+                icon: 'Gem',
                 provider: 'groq',
             },
         ],
@@ -35,36 +42,36 @@ export const modelCatalog: AICategory[] = [
         category: 'Cerebras (Lightning)',
         models: [
             {
-                id: 'llama3.1-8b',
-                name: 'Llama 3.1 8B (Cerebras)',
-                description: 'Generación ultrarrápida vía Cerebras CS-3',
+                id: 'qwen-3.8-27b',
+                name: 'Qwen 3.8 27B',
+                description: 'Generación ultrarrápida con hardware Cerebras',
                 icon: 'Cpu',
                 provider: 'cerebras',
             },
         ],
     },
     {
-        category: 'OpenRouter (Premium & Free)',
+        category: 'OpenRouter (Multi-Provider)',
         models: [
             {
-                id: 'anthropic/claude-3.5-sonnet',
-                name: 'Claude 3.5 Sonnet',
-                description: 'Alta inteligencia y razonamiento avanzado',
-                icon: 'Bot',
-                provider: 'openrouter',
-            },
-            {
-                id: 'openai/gpt-4o',
-                name: 'GPT-4o',
-                description: 'El modelo insignia de OpenAI',
-                icon: 'Sparkles',
-                provider: 'openrouter',
-            },
-            {
                 id: 'openrouter/auto',
-                name: 'OpenRouter Auto',
-                description: 'Elige el mejor modelo gratuito/barato automáticamente',
+                name: 'Auto (Free)',
+                description: 'Selección automática del mejor modelo gratuito disponible',
                 icon: 'Wand2',
+                provider: 'openrouter',
+            },
+            {
+                id: 'meta-llama/llama-4-scout:free',
+                name: 'Llama 4 Scout',
+                description: 'Modelo de Meta optimizado para búsqueda y razonamiento',
+                icon: 'Search',
+                provider: 'openrouter',
+            },
+            {
+                id: 'google/gemma-3-27b-it:free',
+                name: 'Gemma 3 27B',
+                description: 'Modelo potente y gratuito de Google vía OpenRouter',
+                icon: 'Sparkles',
                 provider: 'openrouter',
             },
         ],
