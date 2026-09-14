@@ -1,13 +1,29 @@
-import express from 'express';
-import type { Request, Response } from 'express';
+import { app } from './app';
+import { env } from './config/env';
+import { prisma } from './db';
 
-const app = express();
-const PORT = 3000;
+async function main() {
+    try {
+        // Verificar conexión a la BD
+        await prisma.$connect();
+        console.log('✅ Conectado a la base de datos (SQLite via Prisma)');
 
-app.get('/', (req: Request, res: Response) => {
-    res.status(200).json({ message: 'Hola diego' });
-});
+        const server = app.listen(env.PORT, () => {
+            console.log(`🚀 Servidor NAS API corriendo en http://localhost:${env.PORT}`);
+        });
 
-app.listen(PORT, () => {
-    console.log(`🚀 Servidor corriendo en el puerto http://localhost:${PORT}`);
-});
+        // Manejo de cierres limpios
+        process.on('SIGINT', async () => {
+            await prisma.$disconnect();
+            server.close(() => {
+                console.log('Servidor apagado correctamente.');
+                process.exit(0);
+            });
+        });
+    } catch (error) {
+        console.error('❌ Error al arrancar el servidor:', error);
+        process.exit(1);
+    }
+}
+
+main();
