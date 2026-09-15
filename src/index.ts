@@ -8,8 +8,8 @@ async function main() {
         await prisma.$connect();
         console.log('✅ Conectado a la base de datos (SQLite via Prisma)');
 
-        const server = app.listen(env.PORT, () => {
-            console.log(`🚀 Servidor NAS API corriendo en http://localhost:${env.PORT}`);
+        const server = app.listen(env.PORT, env.HOST, () => {
+            console.log(`🚀 Servidor NAS API corriendo en http://${env.HOST}:${env.PORT}`);
         });
 
         // Manejo de cierres limpios
