@@ -1,6 +1,6 @@
 import { env } from '../../config/env';
 import type { AIModel } from './providers';
-import type { ChatMessage, ProviderStreamChunk } from './openrouter';
+import type { ChatMessage, ProviderStreamChunk } from './types';
 
 const CEREBRAS_BASE_URL = 'https://api.cerebras.ai/v1/chat/completions';
 
@@ -25,6 +25,7 @@ export function hasCerebrasKey(): boolean {
 export async function streamFromCerebras(params: {
     messages: ChatMessage[];
     model: AIModel;
+    signal?: AbortSignal;
 }): Promise<AsyncGenerator<ProviderStreamChunk>> {
     if (!hasCerebrasKey()) {
         throw new Error('CEREBRAS_API_KEY no configurada');
@@ -32,6 +33,7 @@ export async function streamFromCerebras(params: {
 
     const response = await fetch(CEREBRAS_BASE_URL, {
         method: 'POST',
+        signal: params.signal,
         headers: {
             Authorization: `Bearer ${env.CEREBRAS_API_KEY}`,
             'Content-Type': 'application/json',

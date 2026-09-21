@@ -1,17 +1,6 @@
 import { env } from '../../config/env';
 import type { AIModel } from './providers';
-
-export type ChatRole = 'system' | 'user' | 'assistant';
-
-export type ChatMessage = {
-    role: ChatRole;
-    content: string;
-};
-
-export type ProviderStreamChunk = {
-    content?: string;
-    reasoningTokens?: number;
-};
+import type { ChatMessage, ProviderStreamChunk } from './types';
 
 const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
@@ -36,6 +25,7 @@ export function hasOpenRouterKey(): boolean {
 export async function streamFromOpenRouter(params: {
     messages: ChatMessage[];
     model: AIModel;
+    signal?: AbortSignal;
 }): Promise<AsyncGenerator<ProviderStreamChunk>> {
     if (!hasOpenRouterKey()) {
         throw new Error('OPENROUTER_API_KEY no configurada');
@@ -43,6 +33,7 @@ export async function streamFromOpenRouter(params: {
 
     const response = await fetch(OPENROUTER_BASE_URL, {
         method: 'POST',
+        signal: params.signal,
         headers: {
             Authorization: `Bearer ${env.OPENROUTER_API_KEY}`,
             'Content-Type': 'application/json',

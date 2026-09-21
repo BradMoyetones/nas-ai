@@ -1,6 +1,6 @@
 import { env } from '../../config/env';
 import type { AIModel } from './providers';
-import type { ChatMessage, ProviderStreamChunk } from './openrouter';
+import type { ChatMessage, ProviderStreamChunk } from './types';
 
 const GROQ_BASE_URL = 'https://api.groq.com/openai/v1/chat/completions';
 
@@ -25,6 +25,7 @@ export function hasGroqKey(): boolean {
 export async function streamFromGroq(params: {
     messages: ChatMessage[];
     model: AIModel;
+    signal?: AbortSignal;
 }): Promise<AsyncGenerator<ProviderStreamChunk>> {
     if (!hasGroqKey()) {
         throw new Error('GROQ_API_KEY no configurada');
@@ -32,6 +33,7 @@ export async function streamFromGroq(params: {
 
     const response = await fetch(GROQ_BASE_URL, {
         method: 'POST',
+        signal: params.signal,
         headers: {
             Authorization: `Bearer ${env.GROQ_API_KEY}`,
             'Content-Type': 'application/json',

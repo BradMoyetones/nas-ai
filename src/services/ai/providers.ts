@@ -1,9 +1,11 @@
+import type { AIProviderId } from './types';
+
 export interface AIModel {
     id: string;
     name: string;
     description: string;
     icon: string;
-    provider: 'openrouter' | 'groq' | 'cerebras' | 'google';
+    provider: AIProviderId;
 }
 
 export interface AICategory {
