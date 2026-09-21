@@ -26,7 +26,7 @@ router.get('/', async (req: Request, res: Response) => {
 // ─── GET SPECIFIC CONVERSATION ───────────────────────────────────────────
 router.get('/:id', async (req: Request, res: Response) => {
     try {
-        const { id } = req.params;
+        const { id } = req.params as { id: string };
 
         const conversation = await prisma.conversation.findFirst({
             where: {

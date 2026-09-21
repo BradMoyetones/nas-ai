@@ -12,6 +12,7 @@ export const env = {
     OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY || '',
     GROQ_API_KEY: process.env.GROQ_API_KEY || '',
     CEREBRAS_API_KEY: process.env.CEREBRAS_API_KEY || '',
+    GEMINI_API_KEY: process.env.GEMINI_API_KEY || '',
 
     // JWT
     JWT_SECRET: process.env.JWT_SECRET || 'nas-api-jwt-secret-change-me',

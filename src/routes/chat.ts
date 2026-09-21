@@ -6,6 +6,7 @@ import { streamFromGroq } from '../services/ai/groq';
 import { streamFromCerebras } from '../services/ai/cerebras';
 import crypto from 'crypto';
 import { prisma } from '../db';
+import { streamFromGoogle } from '@/services/ai/google';
 
 const router = Router();
 
@@ -64,6 +65,9 @@ router.post('/', async (req: Request, res: Response) => {
                 break;
             case 'cerebras':
                 stream = await streamFromCerebras({ messages, model: selectedModel });
+                break;
+            case 'google':
+                stream = await streamFromGoogle({ messages, model: selectedModel });
                 break;
             default:
                 return res.status(500).json({ error: 'Proveedor no soportado.' });

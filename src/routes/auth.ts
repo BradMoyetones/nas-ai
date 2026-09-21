@@ -81,7 +81,7 @@ router.post('/register', async (req: Request, res: Response) => {
 // ─── VERIFY EMAIL ────────────────────────────────────────────────────────────
 
 router.get('/verify-email/:token', async (req: Request, res: Response) => {
-    const { token } = req.params;
+    const { token } = req.params as { token: string };
 
     const verification = await prisma.emailVerification.findUnique({
         where: { token },
@@ -191,7 +191,10 @@ router.post('/login', async (req: Request, res: Response) => {
 
     res.status(200).json({
         message: 'Código de verificación enviado a tu correo electrónico.',
-        challengeId: challenge.id,
+        challenge: {
+            id: challenge.id,
+            expiresAt: challenge.expiresAt,
+        }
     });
 });
 
@@ -269,6 +272,33 @@ router.post('/login/verify', async (req: Request, res: Response) => {
             email: challenge.user.email,
             isVerified: challenge.user.isVerified,
         },
+    });
+});
+
+router.get('/login/challenge/:id', async (req: Request, res: Response) => {
+    const { id } = req.params as { id: string };
+
+    const challenge = await prisma.loginChallenge.findUnique({
+        where: { id },
+        include: { user: true },
+    });
+
+    if (!challenge) {
+        res.status(404).json({ error: 'Challenge no encontrado.' });
+        return;
+    }
+
+    if (new Date() > challenge.expiresAt) {
+        res.status(400).json({ error: 'El challenge ha expirado.' });
+        return;
+    }
+
+    res.status(200).json({
+        message: 'Challenge encontrado.',
+        challenge: {
+            id: challenge.id,
+            expiresAt: challenge.expiresAt,
+        }
     });
 });
 
