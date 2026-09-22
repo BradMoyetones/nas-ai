@@ -4,7 +4,7 @@ import cookieParser from 'cookie-parser';
 import { env } from './config/env';
 import { authRouter } from './routes/auth';
 import { modelsRouter } from './routes/models';
-import { chatRouter } from './routes/chat';
+import { chatRouter } from './routes/chat.router';
 import { conversationsRouter } from './routes/conversations';
 import { requireAuth, requireVerified } from './middleware/auth';
 

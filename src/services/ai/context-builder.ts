@@ -1,4 +1,5 @@
-import type { ChatMessage, ChatRole } from './types';
+import { ChatRole } from '@/types/message';
+import type { ChatMessage } from './types';
 
 export function buildContext(history: { role: string; content: string }[]): ChatMessage[] {
   const context: ChatMessage[] = [];

@@ -73,4 +73,23 @@ router.post('/', async (req: Request, res: Response) => {
     }
 });
 
+// ─── DELETE CONVERSATION ────────────────────────────────────────────
+router.delete('/:id', async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params as { id: string };
+
+        await prisma.conversation.delete({
+            where: {
+                id,
+                userId: req.user!.userId
+            }
+        });
+
+        res.status(200).json({ message: 'Conversación eliminada' });
+    } catch (error: any) {
+        console.error(`[conversations] DELETE /${req.params.id} error:`, error);
+        res.status(500).json({ error: 'Error al eliminar conversación' });
+    }
+});
+
 export { router as conversationsRouter };

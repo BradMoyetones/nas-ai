@@ -4,7 +4,6 @@ generator client {
 
 datasource db {
   provider = "sqlite"
-  url      = env("DATABASE_URL")
 }
 
 model User {
@@ -82,6 +81,7 @@ model Message {
   content        String
   model          String?
   provider       String?
+  metadata       Json?
   createdAt      DateTime     @default(now())
 
   @@index([conversationId])
