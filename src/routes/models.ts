@@ -40,7 +40,24 @@ router.get('/openrouter', async (req, res) => {
         return;
     }
 
-    res.status(200).json({ ok: true });
+    const response = await fetch('https://openrouter.ai/api/v1/models', {
+        method: 'GET',
+        headers: {
+            Authorization: `Bearer ${env.OPENROUTER_API_KEY}`,
+            'Content-Type': 'application/json',
+        },
+    });
+
+    if (!response.ok) {
+        res.status(400).json({ message: 'Error al obtener modelos de OpenRouter' });
+        return;
+    }
+
+    const data = await response.json();
+    // Only return when id includes :free
+    const filteredFreeModels = data.data.filter((model: { id: string }) => model.id.includes(':free'));
+
+    res.status(200).json(filteredFreeModels);
 });
 
 router.get('/cerebras', (req, res) => {
@@ -48,7 +65,7 @@ router.get('/cerebras', (req, res) => {
         res.status(400).json({ message: 'CEREBRAS_API_KEY not configured' });
         return;
     }
-    res.status(200).json({ ok: true });
+    res.status(200).json({ ok: false });
 });
 
 router.get('/google', async (req, res) => {

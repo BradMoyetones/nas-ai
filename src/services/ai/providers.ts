@@ -5,6 +5,7 @@ export interface AIModel {
     name: string;
     description: string;
     icon: string;
+    enabled: boolean;
     provider: AIProviderId;
 }
 
@@ -23,6 +24,7 @@ export const modelCatalog: AICategory[] = [
                 description: 'Modelo masivo Open Source optimizado para velocidad',
                 icon: 'Zap',
                 provider: 'groq',
+                enabled: true,
             },
             {
                 id: 'openai/gpt-oss-20b',
@@ -30,6 +32,7 @@ export const modelCatalog: AICategory[] = [
                 description: 'Modelo Open Source masivo optimizado para velocidad',
                 icon: 'Brain',
                 provider: 'groq',
+                enabled: true,
             },
             {
                 id: 'whisper-large-v3',
@@ -37,6 +40,7 @@ export const modelCatalog: AICategory[] = [
                 description: 'Modelo de reconocimiento de voz de Whisper',
                 icon: 'Mic',
                 provider: 'groq',
+                enabled: true,
             },
             {
                 id: 'whisper-large-v3-turbo',
@@ -44,6 +48,7 @@ export const modelCatalog: AICategory[] = [
                 description: 'Modelo de reconocimiento de voz turbo de Whisper',
                 icon: 'Mic',
                 provider: 'groq',
+                enabled: true,
             },
         ],
     },
@@ -56,6 +61,7 @@ export const modelCatalog: AICategory[] = [
                 description: 'Poder de 27B parámetros con chips Cerebras',
                 icon: 'Cpu',
                 provider: 'cerebras',
+                enabled: false,
             },
             {
                 id: 'gpt-oss-120b',
@@ -63,6 +69,7 @@ export const modelCatalog: AICategory[] = [
                 description: 'Modelo masivo Open Source optimizado para velocidad en hardware Cerebras',
                 icon: 'Cpu',
                 provider: 'cerebras',
+                enabled: false,
             },
         ],
     },
@@ -75,6 +82,7 @@ export const modelCatalog: AICategory[] = [
                 description: 'Selección automática del mejor modelo gratuito disponible',
                 icon: 'Wand2',
                 provider: 'openrouter',
+                enabled: true,
             },
             {
                 id: 'nvidia/nemotron-3.5-lightning:free',
@@ -82,6 +90,7 @@ export const modelCatalog: AICategory[] = [
                 description: 'Modelo eficiente y gratuito de Nvidia',
                 icon: 'Search',
                 provider: 'openrouter',
+                enabled: true,
             },
             {
                 id: 'nex-agi/nex-n2.5-pro:free',
@@ -89,6 +98,7 @@ export const modelCatalog: AICategory[] = [
                 description: 'Alto razonamiento de NEX AGI capa gratuita',
                 icon: 'Sparkles',
                 provider: 'openrouter',
+                enabled: true,
             },
         ],
     },
@@ -102,6 +112,7 @@ export const modelCatalog: AICategory[] = [
                     'Gemini 3.8 Flash is our most intelligent Flash model, engineered for long-horizon software engineering, autonomous agents, and complex enterprise workflows—all with the speed and cost efficiency of Flash.',
                 icon: 'Gem',
                 provider: 'google',
+                enabled: true,
             },
             {
                 id: 'gemini-3.8-live-extended-thinking',
@@ -110,6 +121,7 @@ export const modelCatalog: AICategory[] = [
                     'Gemini 3.8 Live Extended Thinking is our specialized Live API model designed for complex reasoning, multi-step planning, and long-horizon state tracking during real-time multimodal sessions. It supports configurable thinking levels (MINIMAL, LOW, MEDIUM, HIGH), thought summaries, and asynchronous function calling.',
                 icon: 'Gem',
                 provider: 'google',
+                enabled: true,
             },
             {
                 id: 'gemini-3.5-flash',
@@ -118,6 +130,7 @@ export const modelCatalog: AICategory[] = [
                     'Gemini 3.5 Flash provides sustained frontier-level intelligence optimized for real-world tasks at a higher speed and lower cost. Designed for the agentic era, it excels at sub-agent deployment, multi-step workflows, and long-horizon tasks at scale. This model is particularly effective for rapid agentic loops involving complex coding cycles and iterations.',
                 icon: 'Gem',
                 provider: 'google',
+                enabled: true,
             },
             {
                 id: 'gemini-3.5-flash-lite',
@@ -126,6 +139,7 @@ export const modelCatalog: AICategory[] = [
                     'Gemini 3.5 Flash-Lite is a low-latency, cost-effective multimodal model optimized for high-throughput, low-cost execution for subagent tasks and document parsing. The model supports text, image, video, audio, and PDF inputs, and is designed for high-volume agentic workflows, simple data extraction, and applications where latency and API cost are the primary constraints.',
                 icon: 'Gem',
                 provider: 'google',
+                enabled: true,
             },
             {
                 id: 'gemini-3.1-pro-preview',
@@ -134,6 +148,7 @@ export const modelCatalog: AICategory[] = [
                     "Built to refine the performance and reliability of the Gemini 3 Pro series, Gemini 3.1 Pro Preview provides better thinking, improved token efficiency, and a more grounded, factually consistent experience. It's optimized for software engineering behavior and usability, as well as agentic workflows requiring precise tool usage and reliable multi-step execution across real-world domains.",
                 icon: 'Gem',
                 provider: 'google',
+                enabled: true,
             },
         ],
     },
