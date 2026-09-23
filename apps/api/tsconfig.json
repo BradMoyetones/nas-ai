@@ -1,0 +1,19 @@
+{
+    "extends": "../../tsconfig.base.json",
+    "compilerOptions": {
+        "noImplicitAny": false,
+
+        "rootDir": "./src",
+        "outDir": "./dist",
+
+        "baseUrl": ".",
+        "paths": {
+            "@/*": ["src/*"],
+            "@nas/shared": ["../../packages/shared/src/index.ts"],
+            "@nas/shared/*": ["../../packages/shared/src/*"]
+        },
+        "types": ["node"]
+    },
+    "include": ["src/**/*"],
+    "exclude": ["node_modules", "dist"]
+}

@@ -1,3 +1,7 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
 allowBuilds:
   '@google/genai': true
   '@prisma/client': true
@@ -8,3 +12,4 @@ allowBuilds:
   prisma: true
   protobufjs: true
   workerd: true
+  sharp: true
