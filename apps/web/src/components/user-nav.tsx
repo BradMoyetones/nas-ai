@@ -35,12 +35,14 @@ export function UserNav() {
                     </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem>
-                    <User />
-                    <span>Perfil</span>
+                <DropdownMenuItem asChild>
+                    <Link to="/settings/profile">
+                        <User />
+                        <span>Perfil</span>
+                    </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
-                    <Link to="/settings" className="flex items-center gap-2 cursor-pointer w-full">
+                    <Link to="/settings">
                         <SettingsIcon />
                         <span>Configuración</span>
                     </Link>

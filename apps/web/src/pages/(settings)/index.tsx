@@ -16,7 +16,7 @@ const ROUTES = [
     {
         icon: UserIcon,
         title: "Profile",
-        href: "/settings",
+        href: "/settings/profile",
     },
     {
         icon: KeyIcon,
