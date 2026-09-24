@@ -1,12 +1,11 @@
 import { Hono } from 'hono';
+import { streamText, createUIMessageStream, createUIMessageStreamResponse, toUIMessageStream } from 'ai';
 
 import { getModelById } from '../services/ai/providers';
-import { streamFromProvider } from '../services/ai/engine';
+import { resolveModel } from '../services/ai/provider-registry';
 import { conversationService } from '../services/conversation.service';
-import { buildContext } from '../services/ai/context-builder';
 import { generateConversationTitle } from '../services/ai/conversation-title.service';
 import { normalizeGenerationError, generationErrorToMetadata, isAbortError } from '../services/ai/generation-error';
-import { endChatStream, writeChatStreamEvent } from '../services/ai/chat-sse';
 import type { AppEnv } from '../app';
 
 const chatRouter = new Hono<AppEnv>();
@@ -22,7 +21,7 @@ chatRouter.post('/', async (c) => {
      * Validaciones HTTP
      * ============================================================
      *
-     * Estas ocurren antes de abrir SSE.
+     * Estas ocurren antes de abrir el stream.
      * Por lo tanto, aquí sí utilizamos respuestas HTTP normales.
      */
 
@@ -46,112 +45,107 @@ chatRouter.post('/', async (c) => {
 
     /*
      * ============================================================
-     * Estado de la conversación
+     * Obtener / crear conversación ANTES del stream
      * ============================================================
+     *
+     * REST-first: la conversación se crea antes de abrir el stream.
+     * Esto es más robusto que crearla dentro del stream.
      */
 
     let isNewConversation = false;
     let conversationTitle = '';
 
-    let titleGenerationPromise: Promise<void> | null = null;
+    if (conversationId) {
+        const conversation = await conversationService.getByIdForUser(conversationId, userId);
+
+        if (!conversation) {
+            return c.json({
+                error: 'Conversation not found',
+            }, 404);
+        }
+    } else {
+        conversationTitle = 'New conversation';
+
+        const conversation = await conversationService.create(userId, conversationTitle);
+
+        conversationId = conversation.id;
+
+        isNewConversation = true;
+    }
 
     /*
      * ============================================================
-     * AbortController
+     * Guardar mensaje del usuario
      * ============================================================
+     */
+
+    await conversationService.addMessage(conversationId, {
+        role: 'user',
+        content,
+    });
+
+    /*
+     * ============================================================
+     * Obtener historial y construir mensajes AI SDK
+     * ============================================================
+     */
+
+    const history = await conversationService.getMessages(conversationId);
+
+    const messages = history.map((msg) => ({
+        role: msg.role as 'user' | 'assistant' | 'system',
+        content: msg.content,
+    }));
+
+    /*
+     * ============================================================
+     * Resolver modelo del AI SDK
+     * ============================================================
+     */
+
+    const aiModel = resolveModel(selectedModel.provider, selectedModel.id);
+
+    /*
+     * ============================================================
+     * UI Message Stream con AI SDK v7
+     * ============================================================
+     *
+     * createUIMessageStream nos permite:
+     * 1. Enviar custom chunks (conversation.created, title, etc.)
+     * 2. Merge del stream de texto del LLM
+     * 3. Todo sobre el Data Stream Protocol estándar
      */
 
     const abortController = new AbortController();
 
-    /*
-     * ============================================================
-     * Web Stream para SSE
-     * ============================================================
-     */
+    // Detectar desconexión del cliente
+    c.req.raw.signal.addEventListener('abort', () => {
+        abortController.abort();
+        console.log(`[chat] Client disconnected for conversation ${conversationId}`);
+    });
 
-    const { readable, writable } = new TransformStream<Uint8Array>();
-    const writer = writable.getWriter();
-
-    /*
-     * Procesamos la generación en background mientras
-     * retornamos el readable stream al cliente.
-     */
-    const processingPromise = (async () => {
-        try {
-            /*
-             * ========================================================
-             * Obtener / crear conversación
-             * ========================================================
-             */
-
-            if (conversationId) {
-                const conversation = await conversationService.getByIdForUser(conversationId, userId);
-
-                if (!conversation) {
-                    // SSE no abierto aún — pero ya estamos en el stream,
-                    // así que cerramos el writer
-                    const encoder = new TextEncoder();
-                    writer.write(encoder.encode(
-                        `event: error\ndata: ${JSON.stringify({ error: 'Conversation not found' })}\n\n`
-                    ));
-                    writer.close();
-                    return;
-                }
-            } else {
-                conversationTitle = 'New conversation';
-
-                const conversation = await conversationService.create(userId, conversationTitle);
-
-                conversationId = conversation.id;
-
-                isNewConversation = true;
-            }
+    const stream = createUIMessageStream({
+        execute: async ({ writer }) => {
+            let titleGenerationPromise: Promise<void> | null = null;
 
             /*
              * ========================================================
-             * Guardar mensaje del usuario
-             * ========================================================
-             */
-
-            await conversationService.addMessage(conversationId, {
-                role: 'user',
-                content,
-            });
-
-            /*
-             * ========================================================
-             * Obtener historial
-             * ========================================================
-             */
-
-            const history = await conversationService.getMessages(conversationId);
-
-            /*
-             * ========================================================
-             * Construir contexto
-             * ========================================================
-             */
-
-            const contextMessages = buildContext(history);
-
-            /*
-             * ========================================================
-             * Crear conversación
+             * Evento: conversación creada
              * ========================================================
              */
 
             if (isNewConversation) {
-                writeChatStreamEvent(writer, 'conversation.created', {
+                writer.write({
+                    type: 'custom',
+                    kind: 'nas.conversation-created',
                     id: conversationId,
                     title: conversationTitle,
-                });
+                } as any);
 
                 /*
-                 * El título es independiente de la generación principal.
-                 *
+                 * Generación del título en background.
                  * Si falla, no debe romper el chat.
                  */
-
                 titleGenerationPromise = generateConversationTitle({
                     content,
                     model: selectedModel,
@@ -160,360 +154,157 @@ chatRouter.post('/', async (c) => {
                     .then(async (title) => {
                         await conversationService.updateTitle(conversationId!, title);
 
-                        writeChatStreamEvent(writer, 'conversation.title', {
+                        writer.write({
+                            type: 'custom',
+                            kind: 'nas.conversation-title',
                             id: conversationId!,
                             title,
-                        });
+                        } as any);
                     })
                     .catch((error) => {
-                        if (isAbortError(error)) {
-                            return;
-                        }
-
+                        if (isAbortError(error)) return;
                         console.error('[chat] Error generating conversation title:', error);
                     });
             }
 
             /*
              * ========================================================
-             * Estado de generación
+             * GENERACIÓN con AI SDK
              * ========================================================
-             */
-
-            let chunkCount = 0;
-
-            let fullAssistantContent = '';
-
-            let totalReasoningTokens: number | undefined;
-
-            /*
-             * ========================================================
-             * GENERACIÓN
-             * ========================================================
-             *
-             * Los errores del provider se manejan aquí.
              */
 
             try {
-                const stream = await streamFromProvider({
-                    messages: contextMessages,
-
-                    model: selectedModel,
-
-                    signal: abortController.signal,
-                });
-
-                for await (const chunk of stream) {
-                    /*
-                     * Si el cliente ya se desconectó,
-                     * no seguimos procesando.
-                     */
-
-                    if (abortController.signal.aborted) {
-                        throw new Error('Request aborted');
-                    }
-
-                    chunkCount++;
-
-                    /*
-                     * ------------------------------------------------
-                     * Texto generado
-                     * ------------------------------------------------
-                     */
-
-                    if (chunk.content) {
-                        fullAssistantContent += chunk.content;
-
-                        writeChatStreamEvent(writer, 'message.delta', {
-                            content: chunk.content,
+                const result = streamText({
+                    model: aiModel,
+                    system: 'You are a helpful AI assistant.',
+                    messages,
+                    abortSignal: abortController.signal,
+                    onFinish: async ({ text, usage }) => {
+                        /*
+                         * ====================================================
+                         * Guardar respuesta exitosa
+                         * ====================================================
+                         */
+                        const assistantMsg = await conversationService.addMessage(conversationId, {
+                            role: 'assistant',
+                            content: text,
+                            model: selectedModel.id,
+                            provider: selectedModel.provider,
                         });
-                    }
 
-                    /*
-                     * ------------------------------------------------
-                     * Reasoning tokens
-                     * ------------------------------------------------
-                     */
+                        /*
+                         * ====================================================
+                         * Evento: message.completed
+                         * ====================================================
+                         */
+                        writer.write({
+                            type: 'custom',
+                            kind: 'nas.message-completed',
+                            messageId: assistantMsg.id,
+                            model: selectedModel.id,
+                            provider: selectedModel.provider,
+                            usage: usage ?? undefined,
+                        } as any);
 
-                    if (chunk.reasoningTokens !== undefined) {
-                        totalReasoningTokens = (totalReasoningTokens ?? 0) + chunk.reasoningTokens;
-                    }
-                }
+                        /*
+                         * ====================================================
+                         * Esperar título si es nueva conversación
+                         * ====================================================
+                         */
+                        if (titleGenerationPromise) {
+                            await titleGenerationPromise;
+                        }
 
-                /*
-                 * ====================================================
-                 * Guardar respuesta exitosa
-                 * ====================================================
-                 */
-
-                const assistantMsg = await conversationService.addMessage(conversationId, {
-                    role: 'assistant',
-
-                    content: fullAssistantContent,
-
-                    model: selectedModel.id,
-
-                    provider: selectedModel.provider,
+                        /*
+                         * ====================================================
+                         * Evento: generation.done
+                         * ====================================================
+                         */
+                        writer.write({
+                            type: 'custom',
+                            kind: 'nas.generation-done',
+                            status: 'success',
+                            elapsedMs: Date.now() - startedAt,
+                        } as any);
+                    },
                 });
 
-                /*
-                 * ====================================================
-                 * message.completed
-                 * ====================================================
-                 */
-
-                writeChatStreamEvent(writer, 'message.completed', {
-                    messageId: assistantMsg.id,
-
-                    model: selectedModel.id,
-
-                    provider: selectedModel.provider,
-
-                    usage:
-                        totalReasoningTokens !== undefined
-                            ? {
-                                  reasoningTokens: totalReasoningTokens,
-                              }
-                            : undefined,
-                });
-
-                /*
-                 * ====================================================
-                 * Título
-                 * ====================================================
-                 *
-                 * Solo necesitamos esperar el título cuando la
-                 * generación principal terminó correctamente.
-                 */
-
-                if (titleGenerationPromise) {
-                    await titleGenerationPromise;
-                }
-
-                /*
-                 * ====================================================
-                 * generation.done
-                 * ====================================================
-                 */
-
-                writeChatStreamEvent(writer, 'generation.done', {
-                    status: 'success',
-
-                    elapsedMs: Date.now() - startedAt,
-
-                    chunkCount,
-                });
+                // Merge el stream del LLM en el UI message stream
+                // toUIMessageStream convierte TextStreamPart → UIMessageChunk
+                writer.merge(toUIMessageStream({
+                    stream: result.stream,
+                    sendReasoning: true,
+                }));
             } catch (error) {
                 /*
                  * ====================================================
                  * ABORT
                  * ====================================================
                  */
-
                 if (isAbortError(error) || abortController.signal.aborted) {
                     console.log(`[chat] Generation aborted for conversation ${conversationId}`);
-
                     return;
                 }
 
                 /*
                  * ====================================================
-                 * NORMALIZAR ERROR DEL PROVIDER
+                 * Error del provider
                  * ====================================================
                  */
-
                 const generationError = normalizeGenerationError(error, selectedModel);
-
-                /*
-                 * ====================================================
-                 * LOG TÉCNICO
-                 * ====================================================
-                 */
 
                 console.error('[chat] Generation failed', {
                     conversationId,
-
                     model: selectedModel.id,
-
                     provider: selectedModel.provider,
-
                     code: generationError.code,
-
-                    status: generationError.status,
-
-                    providerCode: generationError.providerCode,
-
-                    retryable: generationError.retryable,
-
-                    requestId: generationError.requestId,
-
                     message: generationError.message,
-
-                    error,
-
-                    stack: error instanceof Error ? error.stack : undefined,
                 });
-
-                /*
-                 * ====================================================
-                 * Metadata persistible
-                 * ====================================================
-                 */
 
                 const metadata = generationErrorToMetadata(generationError);
 
-                /*
-                 * ====================================================
-                 * Guardar mensaje de error
-                 * ====================================================
-                 *
-                 * Si ya recibimos parte de la generación antes de que
-                 * el provider fallara, conservamos ese contenido.
-                 *
-                 * Si no recibimos ningún chunk, usamos el mensaje
-                 * amigable de error.
-                 */
-
                 let errorMessageId: string | undefined;
-
                 try {
                     const errorMessage = await conversationService.addMessage(conversationId, {
                         role: 'assistant',
-
-                        content: fullAssistantContent || generationError.userMessage,
-
+                        content: generationError.userMessage,
                         model: selectedModel.id,
-
                         provider: selectedModel.provider,
-
                         metadata,
                     });
-
                     errorMessageId = errorMessage.id;
                 } catch (dbError) {
-                    /*
-                     * El manejo del error no puede fallar solo porque
-                     * la persistencia del propio error haya fallado.
-                     */
-
                     console.error('[chat] Failed to persist generation error message:', dbError);
                 }
 
-                /*
-                 * ====================================================
-                 * SSE: message.error
-                 * ====================================================
-                 */
-
-                writeChatStreamEvent(writer, 'message.error', {
-                    messageId: errorMessageId,
-
-                    model: selectedModel.id,
-
-                    provider: selectedModel.provider,
-
-                    code: generationError.code,
-
-                    status: generationError.status,
-
-                    message: generationError.userMessage,
-
-                    retryable: generationError.retryable,
+                writer.write({
+                    type: 'error',
+                    errorText: JSON.stringify({
+                        messageId: errorMessageId,
+                        model: selectedModel.id,
+                        provider: selectedModel.provider,
+                        code: generationError.code,
+                        status: generationError.status,
+                        message: generationError.userMessage,
+                        retryable: generationError.retryable,
+                    }),
                 });
 
-                /*
-                 * ====================================================
-                 * SSE: generation.done
-                 * ====================================================
-                 */
-
-                writeChatStreamEvent(writer, 'generation.done', {
+                writer.write({
+                    type: 'custom',
+                    kind: 'nas.generation-done',
                     status: 'error',
-
                     elapsedMs: Date.now() - startedAt,
-
-                    chunkCount,
-                });
+                } as any);
             }
-        } catch (error) {
-            /*
-             * ========================================================
-             * ERROR DE INFRAESTRUCTURA
-             * ========================================================
-             *
-             * Aquí pueden aparecer errores inesperados de:
-             *
-             * - DB
-             * - context builder
-             * - conversation service
-             * - lógica del router
-             */
-
-            if (isAbortError(error) || abortController.signal.aborted) {
-                console.log(`[chat] Request aborted for conversation ${conversationId}`);
-                return;
-            }
-
-            console.error('[chat] Unexpected chat error', {
-                conversationId,
-
-                model: selectedModel.id,
-
-                provider: selectedModel.provider,
-
-                error,
-
-                stack: error instanceof Error ? error.stack : undefined,
-            });
-
-            writeChatStreamEvent(writer, 'message.error', {
-                model: selectedModel.id,
-
-                provider: selectedModel.provider,
-
-                code: 'CHAT_INTERNAL_ERROR',
-
-                message: 'Ocurrió un error inesperado al procesar la conversación.',
-
-                retryable: true,
-            });
-
-            writeChatStreamEvent(writer, 'generation.done', {
-                status: 'error',
-
-                elapsedMs: Date.now() - startedAt,
-
-                chunkCount: 0,
-            });
-        } finally {
-            /*
-             * ============================================================
-             * Cierre defensivo
-             * ============================================================
-             */
-
-            endChatStream(writer);
-        }
-    })();
-
-    /*
-     * Detectar desconexión del cliente.
-     * Hono no tiene un 'close' event en el request,
-     * pero podemos detectar cuando el readable stream se cancela.
-     */
-    c.req.raw.signal.addEventListener('abort', () => {
-        abortController.abort();
-        console.log(`[chat] Client disconnected for conversation ${conversationId}`);
-    });
-
-    return new Response(readable, {
-        headers: {
-            'Content-Type': 'text/event-stream; charset=utf-8',
-            'Cache-Control': 'no-cache, no-transform',
-            'Connection': 'keep-alive',
-            'X-Accel-Buffering': 'no',
+        },
+        onError: (error) => {
+            console.error('[chat] Stream error:', error);
+            return 'An error occurred during generation.';
         },
     });
+
+    return createUIMessageStreamResponse({ stream });
 });
 
 export { chatRouter };

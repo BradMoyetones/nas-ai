@@ -1,7 +1,6 @@
-
-import { streamFromProvider } from './engine';
+import { generateText } from 'ai';
 import type { AIModel } from '@nas/shared';
-import type { ChatMessage } from './types';
+import { resolveModel } from './provider-registry';
 
 interface GenerateConversationTitleParams {
     content: string;
@@ -9,16 +8,7 @@ interface GenerateConversationTitleParams {
     signal?: AbortSignal;
 }
 
-export async function generateConversationTitle({
-    content,
-    model,
-    signal,
-}: GenerateConversationTitleParams): Promise<string> {
-
-    const titlePrompt: ChatMessage[] = [
-        {
-            role: 'system',
-            content: `
+const TITLE_SYSTEM_PROMPT = `
 Generate a short and descriptive title for the conversation based on the user's message.
 
 Rules:
@@ -34,30 +24,24 @@ Rules:
 - Do not use Markdown.
 - Do not add explanations.
 - Return ONLY the title.
-            `.trim(),
-        },
-        {
-            role: 'user',
-            content: content.trim().slice(0, 3000),
-        },
-    ];
+`.trim();
 
-    const stream = await streamFromProvider({
-        messages: titlePrompt,
-        model,
-        signal,
+export async function generateConversationTitle({
+    content,
+    model,
+    signal,
+}: GenerateConversationTitleParams): Promise<string> {
+    const aiModel = resolveModel(model.provider, model.id);
+
+    const { text } = await generateText({
+        model: aiModel,
+        system: TITLE_SYSTEM_PROMPT,
+        prompt: content.trim().slice(0, 3000),
+        abortSignal: signal,
     });
 
-    let title = '';
-
-    for await (const chunk of stream) {
-        if (chunk.content) {
-            title += chunk.content;
-        }
-    }
-
-    title = title
-        .replace(/^["'“”]+|["'“”]+$/g, '')
+    let title = text
+        .replace(/^["'""]+|["'""]+$/g, '')
         .split('\n')[0]
         .trim();
 

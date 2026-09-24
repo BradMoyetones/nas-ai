@@ -1,9 +1,6 @@
 import { Hono } from 'hono';
 import { modelCatalog } from '../services/ai/providers';
-import { hasGroqKey } from '@/services/ai/groq';
-import { hasOpenRouterKey } from '@/services/ai/openrouter';
-import { hasCerebrasKey } from '@/services/ai/cerebras';
-import { ai, hasGoogleKey } from '@/services/ai/google';
+import { hasProviderKey } from '../services/ai/provider-registry';
 import { env } from '@/config/env';
 import type { AppEnv } from '../app';
 
@@ -14,7 +11,7 @@ modelsRouter.get('/', (c) => {
 });
 
 modelsRouter.get('/groq', async (c) => {
-    if (!hasGroqKey()) {
+    if (!hasProviderKey('groq')) {
         return c.json({ message: 'GROQ_API_KEY not configured' }, 400);
     }
 
@@ -34,7 +31,7 @@ modelsRouter.get('/groq', async (c) => {
 });
 
 modelsRouter.get('/openrouter', async (c) => {
-    if (!hasOpenRouterKey()) {
+    if (!hasProviderKey('openrouter')) {
         return c.json({ message: 'OPENROUTER_API_KEY not configured' }, 400);
     }
 
@@ -58,19 +55,19 @@ modelsRouter.get('/openrouter', async (c) => {
 });
 
 modelsRouter.get('/cerebras', (c) => {
-    if (!hasCerebrasKey()) {
+    if (!hasProviderKey('cerebras')) {
         return c.json({ message: 'CEREBRAS_API_KEY not configured' }, 400);
     }
     return c.json({ ok: false });
 });
 
 modelsRouter.get('/google', async (c) => {
-    if (!hasGoogleKey()) {
+    if (!hasProviderKey('google')) {
         return c.json({ message: 'GEMINI_API_KEY not configured' }, 400);
     }
 
-    const models = await ai.models.list();
-    return c.json(models);
+    // TODO: Use AI SDK provider to list models when supported
+    return c.json({ message: 'Use the /api/models endpoint for the full catalog' });
 });
 
 export { modelsRouter };
