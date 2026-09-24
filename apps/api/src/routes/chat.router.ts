@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { streamText, createUIMessageStream, createUIMessageStreamResponse, toUIMessageStream } from 'ai';
 
-import { getModelById } from '../services/ai/providers';
+import { getModelById } from '../services/ai/model-discovery';
 import { resolveModel } from '../services/ai/provider-registry';
 import { conversationService } from '../services/conversation.service';
 import { generateConversationTitle } from '../services/ai/conversation-title.service';
@@ -138,12 +138,16 @@ chatRouter.post('/', async (c) => {
                     system: 'You are a helpful AI assistant.',
                     messages,
                     abortSignal: abortController.signal,
-                    onFinish: async ({ text }) => {
+                    onFinish: async ({ text, usage }) => {
                         await conversationService.addMessage(conversationId, {
                             role: 'assistant',
                             content: text,
                             model: selectedModel.id,
                             provider: selectedModel.provider,
+                            promptTokens: usage?.inputTokens,
+                            completionTokens: usage?.outputTokens,
+                            totalTokens: usage?.totalTokens,
+                            reasoningTokens: usage?.outputTokenDetails?.reasoningTokens,
                         });
 
                         if (titleGenerationPromise) {

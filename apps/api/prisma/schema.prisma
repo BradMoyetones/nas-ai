@@ -18,6 +18,7 @@ model User {
   auth            UserAuth?
   verifications   EmailVerification[]
   loginChallenges LoginChallenge[]
+  credentials     ProviderCredential[]
 }
 
 model UserAuth {
@@ -69,6 +70,10 @@ model Conversation {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   messages  Message[]
+  
+  // Configuración por conversación
+  systemPrompt String?   // Prompt de sistema personalizado
+  defaultModel String?   // Modelo preferido
 
   @@index([userId])
 }
@@ -83,7 +88,32 @@ model Message {
   provider       String?
   metadata       Json?
   createdAt      DateTime     @default(now())
+  
+  // Seguimiento de uso
+  promptTokens     Int?
+  completionTokens Int?
+  totalTokens      Int?
+  reasoningTokens  Int?
+  durationMs       Int?
 
   @@index([conversationId])
   @@index([createdAt])
+}
+
+model ProviderCredential {
+  id            String    @id @default(uuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  providerId    String    // 'openai', 'google', 'groq', etc.
+  encryptedKey  String    // Cifrado con AES-256-GCM
+  iv            String    // Vector de inicialización
+  authTag       String    // Tag de autenticación GCM
+  label         String?   // "Mi clave OpenAI"
+  isValid       Boolean   @default(true)
+  lastValidated DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([userId, providerId])
+  @@index([userId])
 }

@@ -1,15 +1,27 @@
 import { Hono } from 'hono';
-import { modelCatalog } from '../services/ai/providers';
+import { getModelCatalog } from '../services/ai/model-discovery';
 import { hasProviderKey } from '../services/ai/provider-registry';
 import { env } from '@/config/env';
 import type { AppEnv } from '../app';
 
 const modelsRouter = new Hono<AppEnv>();
 
+/**
+ * GET /api/models
+ *
+ * Retorna el catálogo completo de modelos con capacidades.
+ * Los modelos sin API key configurada se marcan como disabled.
+ */
 modelsRouter.get('/', (c) => {
-    return c.json({ categories: modelCatalog });
+    return c.json({ categories: getModelCatalog() });
 });
 
+/**
+ * GET /api/models/groq
+ *
+ * Lista modelos disponibles directamente de la API de Groq.
+ * Útil para descubrimiento dinámico futuro.
+ */
 modelsRouter.get('/groq', async (c) => {
     if (!hasProviderKey('groq')) {
         return c.json({ message: 'GROQ_API_KEY not configured' }, 400);
@@ -30,6 +42,11 @@ modelsRouter.get('/groq', async (c) => {
     return c.json(await response.json());
 });
 
+/**
+ * GET /api/models/openrouter
+ *
+ * Lista modelos gratuitos de OpenRouter.
+ */
 modelsRouter.get('/openrouter', async (c) => {
     if (!hasProviderKey('openrouter')) {
         return c.json({ message: 'OPENROUTER_API_KEY not configured' }, 400);
@@ -48,7 +65,6 @@ modelsRouter.get('/openrouter', async (c) => {
     }
 
     const data = await response.json();
-    // Only return when id includes :free
     const filteredFreeModels = data.data.filter((model: { id: string }) => model.id.includes(':free'));
 
     return c.json(filteredFreeModels);
@@ -61,12 +77,10 @@ modelsRouter.get('/cerebras', (c) => {
     return c.json({ ok: false });
 });
 
-modelsRouter.get('/google', async (c) => {
+modelsRouter.get('/google', (c) => {
     if (!hasProviderKey('google')) {
         return c.json({ message: 'GEMINI_API_KEY not configured' }, 400);
     }
-
-    // TODO: Use AI SDK provider to list models when supported
     return c.json({ message: 'Use the /api/models endpoint for the full catalog' });
 });
 

@@ -4,6 +4,7 @@ import { Message as MsgComponent, MessageContent, MessageResponse } from '@/comp
 import { Reasoning, ReasoningContent, ReasoningTrigger } from '@/components/ai-elements/reasoning';
 import { TypewriterPhrases } from '@/components/typewriter-phrases';
 import { Loader } from '@/components/loader';
+import { Shimmer } from '@/components/ai-elements/shimmer';
 import { AlertCircle, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -76,6 +77,19 @@ export function MessageList({
                     </MsgComponent>
                 );
             })}
+
+            {/* Indicador de pensando */}
+            {isStreaming && messages.length > 0 && (
+                messages[messages.length - 1].role === 'user' ||
+                (messages[messages.length - 1].role === 'assistant' && 
+                 !messages[messages.length - 1].parts?.some(p => isTextUIPart(p) || isReasoningUIPart(p)))
+            ) && (
+                <div className="flex gap-3 items-start">
+                    <div className="text-sm text-muted-foreground">
+                        <Shimmer duration={1}>Pensando...</Shimmer>
+                    </div>
+                </div>
+            )}
 
             {/* Error inline — se muestra tras el último mensaje cuando hay error */}
             {error && !isStreaming && (

@@ -237,6 +237,11 @@ export const conversationService = {
             model?: string;
             provider?: AIProviderId;
             metadata?: MessageMetadata;
+            promptTokens?: number;
+            completionTokens?: number;
+            totalTokens?: number;
+            reasoningTokens?: number;
+            durationMs?: number;
         }
     ): Promise<{ id: string }> {
         return await prisma.message.create({
@@ -247,6 +252,11 @@ export const conversationService = {
                 model: data.model,
                 provider: data.provider,
                 metadata: data.metadata,
+                promptTokens: data.promptTokens,
+                completionTokens: data.completionTokens,
+                totalTokens: data.totalTokens,
+                reasoningTokens: data.reasoningTokens,
+                durationMs: data.durationMs,
             },
             select: {
                 id: true,

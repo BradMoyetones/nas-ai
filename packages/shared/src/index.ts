@@ -12,10 +12,22 @@
 export type { AIProviderId } from './providers';
 
 // Modelos
-export type { AIModel, AICategory } from './models';
+export type { AIModel, AICategory, ModelCapabilities } from './models';
 
 // Mensajes
 export type { GenerationErrorMetadata, MessageMetadata } from './messages';
 
 // Streaming
 export type { ChatStreamEvent } from './streaming';
+
+// Schemas (Zod) — usables en frontend (react-hook-form) y backend (validación)
+export {
+    chatMessageSchema,
+    type ChatMessageInput,
+    createConversationSchema,
+    updateConversationSchema,
+    type CreateConversationInput,
+    type UpdateConversationInput,
+    createCredentialSchema,
+    type CreateCredentialInput,
+} from './schemas';

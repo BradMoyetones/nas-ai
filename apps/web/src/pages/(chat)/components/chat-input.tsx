@@ -15,7 +15,7 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
-import { Brain } from 'lucide-react';
+import { Brain, Eye, Wrench } from 'lucide-react';
 import { identifyModel, resolveModelIcon } from '@/components/icons/ai';
 import type { AICategory } from '@nas/shared';
 import type { ChatStatus } from 'ai';
@@ -132,11 +132,35 @@ export function ChatInput({
                                                             >
                                                                 <div className="flex items-center gap-2">
                                                                     {Icon ? <Icon /> : <Brain />}
-                                                                    <div className="flex flex-col">
-                                                                        <span>{model.name}</span>
-                                                                        <span className="text-xs text-muted-foreground line-clamp-1">
-                                                                            {model.description}
-                                                                        </span>
+                                                                    <div className="flex flex-col gap-1">
+                                                                        <div className="flex flex-col">
+                                                                            <span>{model.name}</span>
+                                                                            <span className="text-xs text-muted-foreground line-clamp-1">
+                                                                                {model.description}
+                                                                            </span>
+                                                                        </div>
+                                                                        {model.capabilities && (
+                                                                            <div className="flex flex-wrap gap-1 mt-0.5">
+                                                                                {model.capabilities.reasoning && (
+                                                                                    <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+                                                                                        <Brain className="size-3" />
+                                                                                        Razonamiento
+                                                                                    </span>
+                                                                                )}
+                                                                                {model.capabilities.imageInput && (
+                                                                                    <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+                                                                                        <Eye className="size-3" />
+                                                                                        Visión
+                                                                                    </span>
+                                                                                )}
+                                                                                {model.capabilities.tools && (
+                                                                                    <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+                                                                                        <Wrench className="size-3" />
+                                                                                        Tools
+                                                                                    </span>
+                                                                                )}
+                                                                            </div>
+                                                                        )}
                                                                     </div>
                                                                 </div>
                                                             </DropdownMenuRadioItem>
