@@ -15,15 +15,17 @@ import {
 } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
 import { Plus, MessageSquare, MoreHorizontal, Trash2, User, LogOut, Settings as SettingsIcon } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { apiClient, conversationService } from '@/lib/axios';
 import { Link, useLocation, useNavigate, useParams } from 'react-router';
 import { Loader } from '@/components/loader';
-import { useMutation } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useAuth } from '@/contexts/auth-context';
+import { Input } from '@/components/ui/input';
+import { useConversationStore } from '@/stores/conversation-store';
 
 interface Conversation {
     id: string;
@@ -32,69 +34,78 @@ interface Conversation {
 }
 
 export function AppSidebar() {
-    const [conversations, setConversations] = useState<Conversation[]>([]);
-    const [loading, setLoading] = useState(true);
+    const [search, setSearch] = useState('');
+    const [debouncedSearch, setDebouncedSearch] = useState('');
+    const { titleUpdates, invalidationKey } = useConversationStore();
+    const queryClient = useQueryClient();
     const location = useLocation();
-    const { isMobile } = useSidebar()
-    const params = useParams()
-    const navigate = useNavigate()
-    const { user, logout } = useAuth()
+    const { isMobile } = useSidebar();
+    const params = useParams();
+    const navigate = useNavigate();
+    const { user, logout } = useAuth();
 
-    async function loadConversations() {
-        try {
-            const response = await apiClient.get<{ conversations: Conversation[] }>('/api/conversations');
-            if (response && response.data.conversations) {
-                setConversations(response.data.conversations);
-            }
-        } catch (error) {
-            console.error('Error loading conversations', error);
-        } finally {
-            setLoading(false);
-        }
-    }
-
+    // Debounce search
     useEffect(() => {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
-        loadConversations();
+        const timer = setTimeout(() => setDebouncedSearch(search), 300);
+        return () => clearTimeout(timer);
+    }, [search]);
 
-        const handleNewConversation = () => {
-            loadConversations();
-        };
+    const {
+        data,
+        fetchNextPage,
+        hasNextPage,
+        isFetchingNextPage,
+        isLoading,
+        refetch,
+    } = useInfiniteQuery({
+        queryKey: ['conversations', { search: debouncedSearch }],
+        queryFn: async ({ pageParam }) => {
+            const params = new URLSearchParams();
+            params.set('limit', '20');
+            if (pageParam) params.set('cursor', pageParam);
+            if (debouncedSearch) params.set('search', debouncedSearch);
+            const response = await apiClient.get<{ conversations: Conversation[]; nextCursor: string | null }>(`/api/conversations?${params}`);
+            return response.data;
+        },
+        initialPageParam: undefined as string | undefined,
+        getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+    });
 
-        const handleConversationTitle = (event: Event) => {
-            const customEvent = event as CustomEvent<{
-                id: string;
-                title: string;
-            }>;
+    // Refetch when invalidation key changes (new conversation)
+    useEffect(() => {
+        if (invalidationKey > 0) refetch();
+    }, [invalidationKey, refetch]);
 
-            const { id, title } = customEvent.detail;
+    // Flatten pages into single list
+    const conversations = useMemo(() => {
+        const items = data?.pages.flatMap((p) => p.conversations) ?? [];
+        // Apply title updates from store
+        return items.map((c) => ({
+            ...c,
+            title: titleUpdates[c.id] ?? c.title,
+        }));
+    }, [data, titleUpdates]);
 
-            setConversations((current) =>
-                current.map((conversation) =>
-                    conversation.id === id
-                        ? {
-                            ...conversation,
-                            title,
-                        }
-                        : conversation
-                )
-            );
-        };
-
-        window.addEventListener('chat:new-conversation', handleNewConversation);
-        window.addEventListener('chat:conversation-title', handleConversationTitle);
-
-        return () => {
-            window.removeEventListener('chat:new-conversation', handleNewConversation);
-            window.removeEventListener('chat:conversation-title', handleConversationTitle);
-        };
-    }, []);
+    // Infinite scroll observer
+    const loadMoreRef = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+        const el = loadMoreRef.current;
+        if (!el) return;
+        const observer = new IntersectionObserver(([entry]) => {
+            if (entry.isIntersecting && hasNextPage && !isFetchingNextPage) {
+                fetchNextPage();
+            }
+        });
+        observer.observe(el);
+        return () => observer.disconnect();
+    }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
     const { mutateAsync: deleteConversation } = useMutation({
         mutationFn: (id: string) => conversationService.delete(id),
         onSuccess: (data, id) => {
             toast.success(data.message);
-            setConversations(prev => prev.filter(conv => conv.id !== id));
+            // Invalidate the query to refresh the list
+            queryClient.invalidateQueries({ queryKey: ['conversations'] });
             if (params.conversationId === id) {
                 navigate('/');
             }
@@ -118,8 +129,16 @@ export function AppSidebar() {
             <SidebarContent className="px-2">
                 <SidebarGroup>
                     <SidebarGroupLabel>Historial</SidebarGroupLabel>
+                    <div className="px-2 pb-2">
+                        <Input
+                            placeholder="Buscar conversaciones..."
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                            className="h-8 text-sm"
+                        />
+                    </div>
                     <SidebarMenu className="gap-1">
-                        {loading ? (
+                        {isLoading ? (
                             <div className="flex justify-center p-4">
                                 <Loader />
                             </div>
@@ -128,33 +147,41 @@ export function AppSidebar() {
                                 No hay conversaciones
                             </div>
                         ) : (
-                            conversations.map((conv) => (
-                                <SidebarMenuItem key={conv.id}>
-                                    <SidebarMenuButton asChild isActive={location.pathname === `/${conv.id}`}>
-                                        <Link to={`/${conv.id}`}>
-                                            <MessageSquare className="h-4 w-4 shrink-0" />
-                                            <span className="truncate">{conv.title}</span>
-                                        </Link>
-                                    </SidebarMenuButton>
-                                    <DropdownMenu>
-                                        <DropdownMenuTrigger asChild>
-                                            <SidebarMenuAction showOnHover>
-                                                <MoreHorizontal />
-                                                <span className="sr-only">More</span>
-                                            </SidebarMenuAction>
-                                        </DropdownMenuTrigger>
-                                        <DropdownMenuContent
-                                            side={isMobile ? 'bottom' : 'right'}
-                                            align={isMobile ? 'end' : 'start'}
-                                        >
-                                            <DropdownMenuItem onClick={() => deleteConversation(conv.id)} variant='destructive'>
-                                                <Trash2 />
-                                                <span>Eliminar</span>
-                                            </DropdownMenuItem>
-                                        </DropdownMenuContent>
-                                    </DropdownMenu>
-                                </SidebarMenuItem>
-                            ))
+                            <>
+                                {conversations.map((conv) => (
+                                    <SidebarMenuItem key={conv.id}>
+                                        <SidebarMenuButton asChild isActive={location.pathname === `/${conv.id}`}>
+                                            <Link to={`/${conv.id}`}>
+                                                <MessageSquare className="h-4 w-4 shrink-0" />
+                                                <span className="truncate">{conv.title}</span>
+                                            </Link>
+                                        </SidebarMenuButton>
+                                        <DropdownMenu>
+                                            <DropdownMenuTrigger asChild>
+                                                <SidebarMenuAction showOnHover>
+                                                    <MoreHorizontal />
+                                                    <span className="sr-only">More</span>
+                                                </SidebarMenuAction>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent
+                                                side={isMobile ? 'bottom' : 'right'}
+                                                align={isMobile ? 'end' : 'start'}
+                                            >
+                                                <DropdownMenuItem onClick={() => deleteConversation(conv.id)} variant='destructive'>
+                                                    <Trash2 />
+                                                    <span>Eliminar</span>
+                                                </DropdownMenuItem>
+                                            </DropdownMenuContent>
+                                        </DropdownMenu>
+                                    </SidebarMenuItem>
+                                ))}
+                                <div ref={loadMoreRef} className="h-4" />
+                                {isFetchingNextPage && (
+                                    <div className="flex justify-center p-2">
+                                        <Loader />
+                                    </div>
+                                )}
+                            </>
                         )}
                     </SidebarMenu>
                 </SidebarGroup>

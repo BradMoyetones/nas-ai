@@ -1,24 +1,9 @@
-/**
- * Eventos globales para notificar al sidebar
- * sobre cambios en las conversaciones.
- *
- * Usamos window events porque el sidebar y el chat
- * están en árboles de componentes separados.
- */
+import { useConversationStore } from './conversation-store';
 
-export const emitNewConversation = () => {
-    window.dispatchEvent(
-        new Event('chat:new-conversation')
-    );
-};
+export function emitNewConversation() {
+    useConversationStore.getState().invalidate();
+}
 
-export const emitConversationTitle = (
-    id: string,
-    title: string
-) => {
-    window.dispatchEvent(
-        new CustomEvent('chat:conversation-title', {
-            detail: { id, title },
-        })
-    );
-};
+export function emitConversationTitle(id: string, title: string) {
+    useConversationStore.getState().updateTitle(id, title);
+}

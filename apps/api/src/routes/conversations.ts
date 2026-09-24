@@ -8,17 +8,41 @@ const conversationsRouter = new Hono<AppEnv>();
 conversationsRouter.get('/', async (c) => {
     try {
         const user = c.get('user');
+        const limit = Math.min(parseInt(c.req.query('limit') || '20', 10), 50);
+        const cursor = c.req.query('cursor');
+        const search = c.req.query('search');
+
+        let cursorCreatedAt;
+        if (cursor) {
+            const cursorConversation = await prisma.conversation.findUnique({
+                where: { id: cursor },
+                select: { createdAt: true }
+            });
+            if (cursorConversation) {
+                cursorCreatedAt = cursorConversation.createdAt;
+            }
+        }
 
         const conversations = await prisma.conversation.findMany({
             where: {
-                userId: user.userId
+                userId: user.userId,
+                ...(search ? { title: { contains: search } } : {}),
+                ...(cursorCreatedAt ? { createdAt: { lt: cursorCreatedAt } } : {}),
             },
-            orderBy: {
-                createdAt: 'desc'
-            }
+            orderBy: { createdAt: 'desc' },
+            take: limit + 1,
+            select: {
+                id: true,
+                title: true,
+                createdAt: true,
+            },
         });
 
-        return c.json({ conversations });
+        const hasMore = conversations.length > limit;
+        const items = hasMore ? conversations.slice(0, limit) : conversations;
+        const nextCursor = hasMore ? items[items.length - 1].id : null;
+
+        return c.json({ conversations: items, nextCursor });
     } catch (error: any) {
         console.error('[conversations] GET / error:', error);
         return c.json({ error: 'Error al obtener conversaciones' }, 500);

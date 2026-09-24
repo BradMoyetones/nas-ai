@@ -8,6 +8,36 @@ import { Shimmer } from '@/components/ai-elements/shimmer';
 import { AlertCircle, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
+interface UsageFooterProps {
+    promptTokens?: number;
+    completionTokens?: number;
+    totalTokens?: number;
+    durationMs?: number;
+}
+
+function UsageFooter({ promptTokens, completionTokens, totalTokens, durationMs }: UsageFooterProps) {
+    if (!totalTokens && !durationMs) return null;
+    
+    return (
+        <div className="flex items-center gap-2 text-[11px] text-muted-foreground/60 mt-1 select-none">
+            {totalTokens != null && (
+                <span>{totalTokens.toLocaleString()} tokens</span>
+            )}
+            {promptTokens != null && completionTokens != null && (
+                <span className="text-muted-foreground/40">
+                    ({promptTokens.toLocaleString()} → {completionTokens.toLocaleString()})
+                </span>
+            )}
+            {durationMs != null && (
+                <>
+                    <span className="text-muted-foreground/30">·</span>
+                    <span>{(durationMs / 1000).toFixed(1)}s</span>
+                </>
+            )}
+        </div>
+    );
+}
+
 interface MessageListProps {
     messages: UIMessage[];
     isStreaming: boolean;
@@ -61,6 +91,7 @@ export function MessageList({
                                         <Reasoning
                                             key={`reasoning-${ri}`}
                                             isStreaming={isStreaming && isLastAssistant && !textContent}
+                                            defaultOpen={false}
                                         >
                                             <ReasoningTrigger />
                                             <ReasoningContent>{r.text}</ReasoningContent>
@@ -74,6 +105,7 @@ export function MessageList({
                                 </>
                             )}
                         </MessageContent>
+                        {m.role === 'assistant' && <UsageFooter />}
                     </MsgComponent>
                 );
             })}
