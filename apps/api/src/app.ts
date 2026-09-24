@@ -29,6 +29,7 @@ app.use(
     cors({
         origin: env.FRONTEND_URL,
         credentials: true,
+        exposeHeaders: ['X-Conversation-Id', 'X-Is-New-Conversation'],
     })
 );
 

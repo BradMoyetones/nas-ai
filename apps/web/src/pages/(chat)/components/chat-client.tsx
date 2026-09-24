@@ -4,8 +4,8 @@ import { TypewriterPhrases } from '@/components/typewriter-phrases';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from 'cn';
-import { AlertCircle, ArrowRight, Brain, Square } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { ArrowRight, Brain, Square } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Message as MsgComponent, MessageContent, MessageResponse } from '@/components/ai-elements/message';
 import { useNavigate } from 'react-router';
 import {
@@ -17,35 +17,28 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import type { Message } from '@/types/models';
-import type { AICategory, ChatStreamEvent, MessageMetadata } from '@nas/shared';
+import type { AICategory } from '@nas/shared';
 import type { ConversationWithMessages } from '@/services/conversation';
-import { useChatStore, emitConversationTitle, emitNewConversation } from '@/stores/chat-store';
+import { emitConversationTitle, emitNewConversation } from '@/stores/chat-store';
 import { useAutoScroll } from '@/hooks/use-auto-scroll';
-import { fetchEventSource } from '@microsoft/fetch-event-source';
 import { Loader } from '@/components/loader';
 import { refreshAccessToken } from '@/lib/axios';
 import {
     identifyModel,
     resolveModelIcon,
 } from "@/components/icons/ai";
+import { useChat } from '@ai-sdk/react';
+import { DefaultChatTransport } from 'ai';
+import type { UIMessage } from 'ai';
 
 interface ChatClientProps {
-    conversationId?: string;
-    initialConversation?: ConversationWithMessages;
+    conversationId?: string | null;
+    initialConversation?: ConversationWithMessages | null;
     isLoadingConversation?: boolean;
     modelsCategories: AICategory[];
 }
 
-type SseEventData<E extends ChatStreamEvent['event']> = Extract<ChatStreamEvent, { event: E }>['data'];
-
-function parseSseData<T>(data: string): T {
-    try {
-        return JSON.parse(data) as T;
-    } catch (error) {
-        throw new Error(`Invalid SSE payload: ${error instanceof Error ? error.message : String(error)}`, { cause: error });
-    }
-}
+const API_URL = import.meta.env.VITE_API_URL || '';
 
 export default function ChatClient({
     conversationId: initialConvId,
@@ -55,50 +48,178 @@ export default function ChatClient({
 }: ChatClientProps) {
     const [value, setValue] = useState('');
     const navigate = useNavigate();
-    const {
-        messages,
-        isStreaming,
-        setConversationId,
-        setMessages,
-        addMessage,
-        updateLastMessage,
-        setIsStreaming,
-        abortStream,
-    } = useChatStore();
     const firstModelId = modelsCategories[0]?.models[0]?.id || 'openai/gpt-oss-120b';
     const [selectedModel, setSelectedModel] = useState<string>(firstModelId);
+    const [conversationId, setConversationId] = useState<string | undefined>(initialConvId ?? undefined);
     const bottomRef = useRef<HTMLDivElement>(null);
-    const serverGenerationErrorRef = useRef(false);
+
+    /*
+     * ============================================================
+     * Refs estables para closures dentro del transport
+     * ============================================================
+     *
+     * El transport se crea una sola vez (useMemo) y los callbacks
+     * necesitan acceder al estado más reciente sin re-crear el hook.
+     * Los refs se actualizan en useEffect (no durante render)
+     * para cumplir con las reglas de React 19.
+     */
+
+    const conversationIdRef = useRef(conversationId);
+    const selectedModelRef = useRef(selectedModel);
+    const navigateRef = useRef(navigate);
+
+    useEffect(() => { conversationIdRef.current = conversationId; }, [conversationId]);
+    useEffect(() => { selectedModelRef.current = selectedModel; }, [selectedModel]);
+    useEffect(() => { navigateRef.current = navigate; }, [navigate]);
+
+    /*
+     * ============================================================
+     * Transport (instancia estable)
+     * ============================================================
+     *
+     * DefaultChatTransport extiende HttpChatTransport.
+     * Configura: api, credentials, fetch (auth retry + headers),
+     * y prepareSendMessagesRequest (transforma body).
+     */
+
+    const transport = useMemo(() => {
+        // eslint-disable-next-line react-hooks/refs
+        return new DefaultChatTransport<UIMessage>({
+            api: `${API_URL}/api/chat`,
+            credentials: 'include',
+
+            /*
+             * Custom fetch: maneja auth retry (401 → refreshAccessToken → retry)
+             * y lee headers de respuesta para metadata de conversación.
+             */
+            fetch: async (url, init) => {
+                let authRetry = false;
+
+                const doRequest = async (): Promise<Response> => {
+                    const res = await fetch(url, init);
+
+                    if (res.status === 401 && !authRetry) {
+                        authRetry = true;
+                        await refreshAccessToken();
+                        return doRequest();
+                    }
+
+                    return res;
+                };
+
+                const response = await doRequest();
+
+                const newConvId = response.headers.get('X-Conversation-Id');
+                const isNew = response.headers.get('X-Is-New-Conversation') === '1';
+
+                if (newConvId && isNew) {
+                    setConversationId(newConvId);
+                    navigateRef.current(`/${newConvId}`, { replace: true });
+                    emitNewConversation();
+                }
+
+                return response;
+            },
+
+            /*
+             * Transforma el body del SDK ({ messages, chatId, ... })
+             * al formato que nuestro backend espera
+             * ({ content, conversationId, modelId }).
+             */
+            prepareSendMessagesRequest: ({ messages: uiMessages }) => {
+                const lastMessage = uiMessages[uiMessages.length - 1];
+                const userContent = lastMessage?.parts
+                    ?.filter((p): p is { type: 'text'; text: string } => p.type === 'text')
+                    .map((p) => p.text)
+                    .join('') ?? '';
+
+                return {
+                    body: {
+                        content: userContent,
+                        conversationId: conversationIdRef.current,
+                        modelId: selectedModelRef.current,
+                    },
+                };
+            },
+        });
+    }, []);
+
+    /*
+     * ============================================================
+     * AI SDK useChat hook
+     * ============================================================
+     */
+
+    const {
+        messages,
+        sendMessage,
+        setMessages,
+        status,
+        stop,
+    } = useChat({
+        transport,
+        
+        onFinish: () => {
+            /*
+             * Cuando termina la generación, re-fetch la conversación
+             * para obtener el título actualizado (se genera en background).
+             */
+            const convId = conversationIdRef.current;
+            if (convId) {
+                fetch(`${API_URL}/api/conversations/${convId}`, { credentials: 'include' })
+                    .then((res) => res.json())
+                    .then((data) => {
+                        if (data?.conversation?.title && data.conversation.title !== 'New conversation') {
+                            emitConversationTitle(convId, data.conversation.title);
+                        }
+                    })
+                    .catch(() => { /* silently ignore */ });
+            }
+        },
+
+        onError: (err) => {
+            console.error('[chat] Error:', err);
+        },
+    });
+
+    const isStreaming = status === 'streaming' || status === 'submitted';
 
     useAutoScroll({
         bottomRef,
         dependencies: [messages, isStreaming],
     });
 
+    /*
+     * ============================================================
+     * Inicializar mensajes desde conversación existente
+     * ============================================================
+     */
+
     useEffect(() => {
-        const currentState = useChatStore.getState();
-
-        if (initialConvId && currentState.conversationId === initialConvId && currentState.messages.length > 0) {
-            return;
-        }
-
         if (initialConversation) {
-            const convs = initialConversation.messages.map(({ role, content, metadata }) => ({
-                role,
-                content,
-                metadata: metadata ?? null,
+            const uiMessages: UIMessage[] = initialConversation.messages.map((msg, i) => ({
+                id: msg.id || `msg-${i}`,
+                role: msg.role as 'user' | 'assistant',
+                parts: [{ type: 'text' as const, text: msg.content }],
+                createdAt: new Date(msg.createdAt),
             }));
 
-            setMessages(convs);
-        } else {
+            setMessages(uiMessages);
+        } else if (!initialConvId) {
             setMessages([]);
         }
 
-        setConversationId(initialConvId);
-        serverGenerationErrorRef.current = false;
-    }, [initialConversation, initialConvId, setMessages, setConversationId]);
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setConversationId(initialConvId ?? undefined);
+    }, [initialConversation, initialConvId, setMessages]);
 
-    const handleSubmit = async (e: React.FormEvent) => {
+    /*
+     * ============================================================
+     * Submit handler
+     * ============================================================
+     */
+
+    const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
 
         if (!value.trim() || isStreaming) {
@@ -109,211 +230,23 @@ export default function ChatClient({
             behavior: 'smooth',
         });
 
-        serverGenerationErrorRef.current = false;
-
         const currentContent = value.trim();
-
-        const userMessage: Pick<Message, 'role' | 'content'> = {
-            role: 'user',
-            content: currentContent,
-        };
-
-        addMessage(userMessage);
         setValue('');
-        setIsStreaming(true);
 
-        addMessage({
-            role: 'assistant',
-            content: '',
-        });
-
-        const API_URL = import.meta.env.VITE_API_URL || '';
-
-        let assistantContent = '';
-        let currentConversationId = useChatStore.getState().conversationId;
-
-        let authRetry = false;
-
-        try {
-            await fetchEventSource(`${API_URL}/api/chat`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                credentials: 'include',
-                body: JSON.stringify({
-                    content: currentContent,
-                    conversationId: currentConversationId,
-                    modelId: selectedModel,
-                }),
-                signal: useChatStore.getState().abortController?.signal,
-                openWhenHidden: true,
-                async onopen(response) {
-                    if (response.status === 401) {
-                        if (authRetry) {
-                            throw new Error('Authentication failed after token refresh.');
-                        }
-                        authRetry = true;
-                        await refreshAccessToken();
-                        throw new Error('AUTH_REFRESH_RETRY');
-                    }
-
-                    if (!response.ok) {
-                        throw new Error(`Chat request failed: ${response.status} ${response.statusText}`);
-                    }
-
-                    const contentType = response.headers.get('content-type') ?? '';
-
-                    if (!contentType.toLowerCase().includes('text/event-stream')) {
-                        throw new Error(`Expected SSE response, received: ${contentType || 'unknown content type'}`);
-                    }
-
-                    authRetry = false;
-                },
-
-                onmessage(ev) {
-                    if (ev.event === 'conversation.created') {
-                        const data = parseSseData<SseEventData<'conversation.created'>>(ev.data);
-                        setConversationId(data.id);
-                        currentConversationId = data.id;
-
-                        navigate(`/${data.id}`, {
-                            replace: true,
-                        });
-
-                        emitNewConversation();
-                        return;
-                    }
-
-                    if (ev.event === 'conversation.title') {
-                        const data = parseSseData<SseEventData<'conversation.title'>>(ev.data);
-                        emitConversationTitle(data.id, data.title);
-
-                        return;
-                    }
-
-                    if (ev.event === 'message.delta') {
-                        const data = parseSseData<SseEventData<'message.delta'>>(ev.data);
-
-                        if (!data.content) {
-                            return;
-                        }
-
-                        assistantContent += data.content;
-
-                        const currentMessages = useChatStore.getState().messages;
-                        const lastMessage = currentMessages[currentMessages.length - 1];
-
-                        if (lastMessage?.role === 'assistant') {
-                            updateLastMessage(assistantContent);
-                        } else {
-                            addMessage({
-                                role: 'assistant',
-                                content: assistantContent,
-                            });
-                        }
-
-                        return;
-                    }
-
-                    if (ev.event === 'message.completed') {
-                        return;
-                    }
-
-                    if (ev.event === 'message.error') {
-                        const data = parseSseData<SseEventData<'message.error'>>(ev.data);
-                        serverGenerationErrorRef.current = true;
-
-                        const metadata: MessageMetadata = {
-                            type: 'generation_error',
-                            code: data.code,
-                            provider: data.provider,
-                            modelId: data.model,
-                            retryable: data.retryable,
-                            ...(data.status !== undefined ? { status: data.status } : {}),
-                        };
-
-                        const content = assistantContent.trim() ? assistantContent : data.message;
-                        updateLastMessage(content, metadata);
-                        return;
-                    }
-
-                    if (ev.event === 'generation.done') {
-                        const data = parseSseData<SseEventData<'generation.done'>>(ev.data);
-                        setIsStreaming(false);
-
-                        if (data.status === 'success') {
-                            serverGenerationErrorRef.current = false;
-                        }
-                        return;
-                    }
-
-                    console.warn('[chat] Unknown SSE event:', ev.event, ev.data);
-                },
-
-                onclose() {
-                    setIsStreaming(false);
-                },
-
-                onerror(err) {
-                    console.error('[chat] FetchEventSource error:', err);
-
-                    if (serverGenerationErrorRef.current) {
-                        throw err;
-                    }
-
-                    /*
-                     * Si el error fue producido por nuestro 401,
-                     * fetchEventSource volverá a ejecutar la petición.
-                     */
-                    if (err instanceof Error && err.message === 'AUTH_REFRESH_RETRY') {
-                        return;
-                    }
-
-                    const transportMessage = 'Se perdió la conexión con el servidor durante la generación.';
-
-                    const metadata: MessageMetadata = {
-                        type: 'generation_error',
-                        code: 'STREAM_CONNECTION_ERROR',
-                        provider: 'google',
-                        modelId: selectedModel,
-                        retryable: true,
-                    };
-
-                    if (!assistantContent.trim()) {
-                        updateLastMessage(transportMessage, metadata);
-                    } else {
-                        updateLastMessage(assistantContent, metadata);
-                    }
-
-                    setIsStreaming(false);
-
-                    throw err;
-                },
-            });
-        } catch (error) {
-            const aborted = useChatStore.getState().abortController?.signal.aborted;
-
-            if (aborted) {
-                setIsStreaming(false);
-                return;
-            }
-
-            console.error('[chat] Request failed:', error);
-
-            setIsStreaming(false);
-        }
+        sendMessage({ text: currentContent });
     };
+
+    /*
+     * ============================================================
+     * Model helpers
+     * ============================================================
+     */
 
     const getCurrentModelData = () => {
         for (const cat of modelsCategories) {
             const model = cat.models.find((m) => m.id === selectedModel);
-
-            if (model) {
-                return model;
-            }
+            if (model) return model;
         }
-
         return undefined;
     };
 
@@ -325,6 +258,19 @@ export default function ChatClient({
     } : null;
 
     const ModelIconComponent = currentModelDescriptor ? resolveModelIcon(currentModelDescriptor).component : null;
+
+    /*
+     * ============================================================
+     * Extraer texto de UIMessage
+     * ============================================================
+     */
+
+    const getMessageText = (msg: UIMessage): string => {
+        return msg.parts
+            ?.filter((p): p is { type: 'text'; text: string } => p.type === 'text')
+            .map((p) => p.text)
+            .join('') ?? '';
+    };
 
     return (
         <div className="relative flex-1 flex flex-col p-4 pb-0 max-w-4xl mx-auto w-full">
@@ -341,51 +287,17 @@ export default function ChatClient({
                     {messages.map((m, i) => {
                         const isLastMessage = i === messages.length - 1;
                         const isLastAssistant = isLastMessage && m.role === 'assistant';
-                        const generationError =
-                            isLastAssistant && m.metadata?.type === 'generation_error' ? m.metadata : null;
+                        const content = getMessageText(m);
 
                         return (
-                            <MsgComponent key={i} from={m.role}>
+                            <MsgComponent key={m.id || i} from={m.role}>
                                 <MessageContent>
                                     {m.role === 'user' ? (
-                                        m.content
+                                        content
                                     ) : (
-                                        <div className="flex flex-col gap-3">
-                                            <MessageResponse parseIncompleteMarkdown={isStreaming && isLastAssistant}>
-                                                {m.content || ' '}
-                                            </MessageResponse>
-
-                                            {generationError && (
-                                                <div
-                                                    className={cn(
-                                                        'flex items-start gap-2 rounded-lg border px-3 py-2 text-sm',
-                                                        'border-destructive/20 bg-destructive/5 text-muted-foreground'
-                                                    )}
-                                                >
-                                                    <AlertCircle className="mt-0.5 size-4 shrink-0 text-destructive" />
-                                                    <div className="min-w-0 space-y-0.5">
-                                                        <p className="font-medium text-foreground">
-                                                            No se pudo completar la respuesta
-                                                        </p>
-                                                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
-                                                            <span>{generationError.code}</span>
-                                                            {generationError.status !== undefined && (
-                                                                <>
-                                                                    <span>·</span>
-                                                                    <span>Error {generationError.status}</span>
-                                                                </>
-                                                            )}
-                                                            {generationError.retryable && (
-                                                                <>
-                                                                    <span>·</span>
-                                                                    <span>Puede reintentarse</span>
-                                                                </>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </div>
+                                        <MessageResponse parseIncompleteMarkdown={isStreaming && isLastAssistant}>
+                                            {content || ' '}
+                                        </MessageResponse>
                                     )}
                                 </MessageContent>
                             </MsgComponent>
@@ -446,7 +358,6 @@ export default function ChatClient({
                                                 className="rounded-full h-8 px-3 flex items-center gap-1.5 bg-background"
                                                 disabled={isStreaming}
                                             >
-
                                                 {ModelIconComponent ? <ModelIconComponent /> : <Brain />}
                                                 <span className="text-sm">{currentModel?.name || 'Modelo'}</span>
                                             </Button>
@@ -510,7 +421,7 @@ export default function ChatClient({
                                         type="button"
                                         variant="destructive"
                                         size="icon"
-                                        onClick={() => abortStream()}
+                                        onClick={() => stop()}
                                     >
                                         <Square className="fill-current h-4 w-4" />
                                         <span className="sr-only">Stop</span>

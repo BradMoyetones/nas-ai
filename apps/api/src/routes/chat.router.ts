@@ -11,7 +11,6 @@ import type { AppEnv } from '../app';
 const chatRouter = new Hono<AppEnv>();
 
 chatRouter.post('/', async (c) => {
-    const startedAt = Date.now();
     const user = c.get('user');
 
     let { content, conversationId, modelId } = await c.req.json();
@@ -20,9 +19,6 @@ chatRouter.post('/', async (c) => {
      * ============================================================
      * Validaciones HTTP
      * ============================================================
-     *
-     * Estas ocurren antes de abrir el stream.
-     * Por lo tanto, aquí sí utilizamos respuestas HTTP normales.
      */
 
     if (typeof content !== 'string' || content.trim() === '') {
@@ -47,13 +43,9 @@ chatRouter.post('/', async (c) => {
      * ============================================================
      * Obtener / crear conversación ANTES del stream
      * ============================================================
-     *
-     * REST-first: la conversación se crea antes de abrir el stream.
-     * Esto es más robusto que crearla dentro del stream.
      */
 
     let isNewConversation = false;
-    let conversationTitle = '';
 
     if (conversationId) {
         const conversation = await conversationService.getByIdForUser(conversationId, userId);
@@ -64,12 +56,9 @@ chatRouter.post('/', async (c) => {
             }, 404);
         }
     } else {
-        conversationTitle = 'New conversation';
-
-        const conversation = await conversationService.create(userId, conversationTitle);
+        const conversation = await conversationService.create(userId, 'New conversation');
 
         conversationId = conversation.id;
-
         isNewConversation = true;
     }
 
@@ -109,16 +98,10 @@ chatRouter.post('/', async (c) => {
      * ============================================================
      * UI Message Stream con AI SDK v7
      * ============================================================
-     *
-     * createUIMessageStream nos permite:
-     * 1. Enviar custom chunks (conversation.created, title, etc.)
-     * 2. Merge del stream de texto del LLM
-     * 3. Todo sobre el Data Stream Protocol estándar
      */
 
     const abortController = new AbortController();
 
-    // Detectar desconexión del cliente
     c.req.raw.signal.addEventListener('abort', () => {
         abortController.abort();
         console.log(`[chat] Client disconnected for conversation ${conversationId}`);
@@ -129,23 +112,9 @@ chatRouter.post('/', async (c) => {
             let titleGenerationPromise: Promise<void> | null = null;
 
             /*
-             * ========================================================
-             * Evento: conversación creada
-             * ========================================================
+             * Generación del título en background (solo nuevas conversaciones)
              */
-
             if (isNewConversation) {
-                writer.write({
-                    type: 'custom',
-                    kind: 'nas.conversation-created',
-                    id: conversationId,
-                    title: conversationTitle,
-                } as any);
-
-                /*
-                 * Generación del título en background.
-                 * Si falla, no debe romper el chat.
-                 */
                 titleGenerationPromise = generateConversationTitle({
                     content,
                     model: selectedModel,
@@ -153,13 +122,6 @@ chatRouter.post('/', async (c) => {
                 })
                     .then(async (title) => {
                         await conversationService.updateTitle(conversationId!, title);
-
-                        writer.write({
-                            type: 'custom',
-                            kind: 'nas.conversation-title',
-                            id: conversationId!,
-                            title,
-                        } as any);
                     })
                     .catch((error) => {
                         if (isAbortError(error)) return;
@@ -168,89 +130,38 @@ chatRouter.post('/', async (c) => {
             }
 
             /*
-             * ========================================================
              * GENERACIÓN con AI SDK
-             * ========================================================
              */
-
             try {
                 const result = streamText({
                     model: aiModel,
                     system: 'You are a helpful AI assistant.',
                     messages,
                     abortSignal: abortController.signal,
-                    onFinish: async ({ text, usage }) => {
-                        /*
-                         * ====================================================
-                         * Guardar respuesta exitosa
-                         * ====================================================
-                         */
-                        const assistantMsg = await conversationService.addMessage(conversationId, {
+                    onFinish: async ({ text }) => {
+                        await conversationService.addMessage(conversationId, {
                             role: 'assistant',
                             content: text,
                             model: selectedModel.id,
                             provider: selectedModel.provider,
                         });
 
-                        /*
-                         * ====================================================
-                         * Evento: message.completed
-                         * ====================================================
-                         */
-                        writer.write({
-                            type: 'custom',
-                            kind: 'nas.message-completed',
-                            messageId: assistantMsg.id,
-                            model: selectedModel.id,
-                            provider: selectedModel.provider,
-                            usage: usage ?? undefined,
-                        } as any);
-
-                        /*
-                         * ====================================================
-                         * Esperar título si es nueva conversación
-                         * ====================================================
-                         */
                         if (titleGenerationPromise) {
                             await titleGenerationPromise;
                         }
-
-                        /*
-                         * ====================================================
-                         * Evento: generation.done
-                         * ====================================================
-                         */
-                        writer.write({
-                            type: 'custom',
-                            kind: 'nas.generation-done',
-                            status: 'success',
-                            elapsedMs: Date.now() - startedAt,
-                        } as any);
                     },
                 });
 
-                // Merge el stream del LLM en el UI message stream
-                // toUIMessageStream convierte TextStreamPart → UIMessageChunk
                 writer.merge(toUIMessageStream({
                     stream: result.stream,
                     sendReasoning: true,
                 }));
             } catch (error) {
-                /*
-                 * ====================================================
-                 * ABORT
-                 * ====================================================
-                 */
                 if (isAbortError(error) || abortController.signal.aborted) {
                     console.log(`[chat] Generation aborted for conversation ${conversationId}`);
                     return;
                 }
 
-                /*
-                 * ====================================================
-                 * Error del provider
-                 * ====================================================
-                 */
                 const generationError = normalizeGenerationError(error, selectedModel);
 
                 console.error('[chat] Generation failed', {
@@ -263,39 +174,22 @@ chatRouter.post('/', async (c) => {
 
                 const metadata = generationErrorToMetadata(generationError);
 
-                let errorMessageId: string | undefined;
                 try {
-                    const errorMessage = await conversationService.addMessage(conversationId, {
+                    await conversationService.addMessage(conversationId, {
                         role: 'assistant',
                         content: generationError.userMessage,
                         model: selectedModel.id,
                         provider: selectedModel.provider,
                         metadata,
                     });
-                    errorMessageId = errorMessage.id;
                 } catch (dbError) {
                     console.error('[chat] Failed to persist generation error message:', dbError);
                 }
 
                 writer.write({
                     type: 'error',
-                    errorText: JSON.stringify({
-                        messageId: errorMessageId,
-                        model: selectedModel.id,
-                        provider: selectedModel.provider,
-                        code: generationError.code,
-                        status: generationError.status,
-                        message: generationError.userMessage,
-                        retryable: generationError.retryable,
-                    }),
+                    errorText: generationError.userMessage,
                 });
-
-                writer.write({
-                    type: 'custom',
-                    kind: 'nas.generation-done',
-                    status: 'error',
-                    elapsedMs: Date.now() - startedAt,
-                } as any);
             }
         },
         onError: (error) => {
@@ -304,7 +198,21 @@ chatRouter.post('/', async (c) => {
         },
     });
 
-    return createUIMessageStreamResponse({ stream });
+    /*
+     * ============================================================
+     * Response con headers custom para metadata de conversación
+     * ============================================================
+     *
+     * El frontend lee estos headers para actualizar la UI
+     * (navegación, sidebar, etc.) sin depender de chunks custom.
+     */
+
+    const response = createUIMessageStreamResponse({ stream });
+
+    response.headers.set('X-Conversation-Id', conversationId);
+    response.headers.set('X-Is-New-Conversation', isNewConversation ? '1' : '0');
+
+    return response;
 });
 
 export { chatRouter };
