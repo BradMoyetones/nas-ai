@@ -11,7 +11,6 @@ import Register from "@/pages/(auth)/register/page"
 import VerifyEmailPage from "@/pages/(auth)/verify-email/page"
 import { ErrorBoundary } from "@/components/error-boundary"
 
-// eslint-disable-next-line react-refresh/only-export-components
 function RouterErrorThrower(): React.ReactNode {
     const error = useRouteError();
 
