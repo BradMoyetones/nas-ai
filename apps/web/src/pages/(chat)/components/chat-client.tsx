@@ -6,6 +6,7 @@ import type { AICategory } from '@nas/shared';
 import type { ConversationWithMessages } from '@/services/conversation';
 import { emitConversationTitle, emitNewConversation } from '@/stores/chat-store';
 import { refreshAccessToken } from '@/lib/axios';
+import { useAutoScroll } from '@/hooks/use-auto-scroll';
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport } from 'ai';
 import type { UIMessage } from 'ai';
@@ -39,6 +40,12 @@ export default function ChatClient({
     useEffect(() => { conversationIdRef.current = conversationId; }, [conversationId]);
     useEffect(() => { selectedModelRef.current = selectedModel; }, [selectedModel]);
     useEffect(() => { navigateRef.current = navigate; }, [navigate]);
+
+    /*
+     * Scroll sentinel — vive DEBAJO del ChatInput (sticky)
+     * para que el auto-scroll siempre lleve al fondo real.
+     */
+    const bottomRef = useRef<HTMLDivElement>(null);
 
     const transport = useMemo(() => {
         // eslint-disable-next-line react-hooks/refs
@@ -92,6 +99,7 @@ export default function ChatClient({
         setMessages,
         status,
         stop,
+        error,
     } = useChat({
         transport,
         onFinish: () => {
@@ -107,12 +115,14 @@ export default function ChatClient({
                     .catch(() => { /* silently ignore */ });
             }
         },
-        onError: (err) => {
-            console.error('[chat] Error:', err);
-        },
     });
 
     const isStreaming = status === 'streaming' || status === 'submitted';
+
+    useAutoScroll({
+        bottomRef,
+        dependencies: [messages, isStreaming, error],
+    });
 
     useEffect(() => {
         if (initialConversation) {
@@ -136,14 +146,31 @@ export default function ChatClient({
         sendMessage({ text });
     };
 
+    const handleRetry = () => {
+        // Reenvía el último mensaje del usuario
+        const lastUserMessage = [...messages].reverse().find(m => m.role === 'user');
+        if (lastUserMessage) {
+            const textContent = lastUserMessage.parts
+                .filter((p): p is { type: 'text'; text: string } => p.type === 'text')
+                .map(p => p.text)
+                .join('');
+
+            if (textContent) {
+                sendMessage({ text: textContent });
+            }
+        }
+    };
+
     return (
         <div className="relative flex-1 flex flex-col p-4 pb-0 max-w-4xl mx-auto w-full">
-            <MessageList 
-                messages={messages} 
-                isStreaming={isStreaming} 
-                isLoadingConversation={isLoadingConversation} 
+            <MessageList
+                messages={messages}
+                isStreaming={isStreaming}
+                isLoadingConversation={isLoadingConversation}
+                error={error}
+                onRetry={handleRetry}
             />
-            <ChatInput 
+            <ChatInput
                 onSubmit={handleSubmit}
                 status={status}
                 onStop={stop}
@@ -151,6 +178,8 @@ export default function ChatClient({
                 onModelChange={setSelectedModel}
                 modelsCategories={modelsCategories}
             />
+            {/* Scroll sentinel — DEBAJO del input sticky para que scroll llegue al fondo real */}
+            <div ref={bottomRef} />
         </div>
     );
 }
