@@ -49,6 +49,71 @@ conversationsRouter.get('/', async (c) => {
     }
 });
 
+// ─── GET PAGINATED MESSAGES ──────────────────────────────────────────
+conversationsRouter.get('/:id/messages', async (c) => {
+    try {
+        const id = c.req.param('id');
+        const user = c.get('user');
+        const limit = Math.min(parseInt(c.req.query('limit') || '30', 10), 100);
+        const cursor = c.req.query('cursor');
+
+        // Verificar ownership
+        const conversation = await prisma.conversation.findFirst({
+            where: { id, userId: user.userId },
+            select: { id: true },
+        });
+
+        if (!conversation) {
+            return c.json({ error: 'Conversación no encontrada' }, 404);
+        }
+
+        let cursorCreatedAt;
+        if (cursor) {
+            const cursorMsg = await prisma.message.findUnique({
+                where: { id: cursor },
+                select: { createdAt: true },
+            });
+            if (cursorMsg) cursorCreatedAt = cursorMsg.createdAt;
+        }
+
+        // Para mensajes, paginamos hacia ATRÁS (los más recientes primero)
+        // pero retornamos en orden cronológico
+        const messages = await prisma.message.findMany({
+            where: {
+                conversationId: id,
+                ...(cursorCreatedAt ? { createdAt: { lt: cursorCreatedAt } } : {}),
+            },
+            orderBy: { createdAt: 'desc' },
+            take: limit + 1,
+            select: {
+                id: true,
+                role: true,
+                content: true,
+                model: true,
+                provider: true,
+                metadata: true,
+                promptTokens: true,
+                completionTokens: true,
+                totalTokens: true,
+                reasoningTokens: true,
+                durationMs: true,
+                createdAt: true,
+            },
+        });
+
+        const hasMore = messages.length > limit;
+        const items = hasMore ? messages.slice(0, limit) : messages;
+        // Revertir para orden cronológico
+        items.reverse();
+        const nextCursor = hasMore ? items[0].id : null;
+
+        return c.json({ messages: items, nextCursor, hasMore });
+    } catch (error) {
+        console.error(`[conversations] GET /${c.req.param('id')}/messages error:`, error);
+        return c.json({ error: 'Error al obtener mensajes' }, 500);
+    }
+});
+
 // ─── GET SPECIFIC CONVERSATION ───────────────────────────────────────────
 conversationsRouter.get('/:id', async (c) => {
     try {

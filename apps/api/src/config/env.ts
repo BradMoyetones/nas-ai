@@ -31,3 +31,14 @@ export const env = {
     FRONTEND_URL: process.env.FRONTEND_URL || 'http://localhost:5173',
     COOKIE_DOMAIN: process.env.COOKIE_DOMAIN || '',
 };
+
+if (env.NODE_ENV === 'production') {
+    if (env.JWT_SECRET.includes('change-me')) {
+        console.error('\n⚠️  SECURITY WARNING: Using default JWT_SECRET in production!\n   Set JWT_SECRET environment variable.\n');
+        process.exit(1);
+    }
+    if (env.JWT_REFRESH_SECRET.includes('change-me')) {
+        console.error('\n⚠️  SECURITY WARNING: Using default JWT_REFRESH_SECRET in production!\n   Set JWT_REFRESH_SECRET environment variable.\n');
+        process.exit(1);
+    }
+}

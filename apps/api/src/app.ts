@@ -58,6 +58,13 @@ app.use('/api/chat/*', requireAuth, requireVerified);
 app.use('/api/conversations/*', requireAuth, requireVerified);
 app.use('/api/credentials/*', requireAuth, requireVerified);
 
+import { rateLimit } from './middleware/rate-limit';
+
+app.use('/api/chat/*', rateLimit({ max: 30, windowMs: 60_000 })); // 30 msg/min
+app.use('/api/chat', rateLimit({ max: 30, windowMs: 60_000 }));
+
+app.use('/api/auth/*', rateLimit({ max: 10, windowMs: 60_000 })); // 10 auth/min
+
 // Also protect the exact paths (without trailing segments)
 app.use('/api/models', requireAuth, requireVerified);
 app.use('/api/chat', requireAuth, requireVerified);

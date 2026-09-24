@@ -1,6 +1,7 @@
 import {
     PromptInput,
     PromptInputTextarea,
+    usePromptInputAttachments,
     PromptInputFooter,
     PromptInputTools,
     PromptInputSubmit,
@@ -17,19 +18,57 @@ import {
     ModelSelectorName,
 } from '@/components/ai-elements/model-selector';
 import { Button } from '@/components/ui/button';
-import { Brain, Eye, Wrench } from 'lucide-react';
+import { Brain, Eye, Wrench, Paperclip, X } from 'lucide-react';
 import { identifyModel, resolveModelIcon } from '@/components/icons/ai';
 import type { AICategory } from '@nas/shared';
 import type { ChatStatus } from 'ai';
 import { useState } from 'react';
 
+import type { FileUIPart } from 'ai';
+
 interface ChatInputProps {
-    onSubmit: (text: string) => void;
+    onSubmit: (text: string, files?: FileUIPart[]) => void;
     status: ChatStatus;
     onStop: () => void;
     selectedModel: string;
     onModelChange: (model: string) => void;
     modelsCategories: AICategory[];
+}
+
+
+function AttachmentButton({ disabled }: { disabled?: boolean }) {
+    const { openFileDialog, files, remove } = usePromptInputAttachments();
+    
+    return (
+        <div className="flex items-center gap-2">
+            <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="size-8"
+                disabled={disabled}
+                onClick={openFileDialog}
+            >
+                <Paperclip className="size-4" />
+            </Button>
+            {files.length > 0 && (
+                <div className="flex gap-2">
+                    {files.map((file) => (
+                        <div key={file.id} className="relative flex items-center gap-1 rounded-md bg-secondary px-2 py-1 text-xs">
+                            <span className="truncate max-w-25">{file.filename}</span>
+                            <button
+                                type="button"
+                                className="rounded-full hover:bg-secondary-foreground/10"
+                                onClick={() => remove(file.id)}
+                            >
+                                <X className="size-3" />
+                            </button>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
 }
 
 export function ChatInput({
@@ -81,8 +120,8 @@ export function ChatInput({
             <div className="relative max-w-4xl mx-auto w-full pointer-events-auto bg-background">
                 <PromptInput
                     onSubmit={(message) => {
-                        if (!message.text.trim()) return;
-                        onSubmit(message.text.trim());
+                        if (!message.text.trim() && (!message.files || message.files.length === 0)) return;
+                        onSubmit(message.text.trim(), message.files?.length ? message.files : undefined);
                     }}
                     className="rounded-3xl"
                 >
@@ -92,6 +131,7 @@ export function ChatInput({
                     />
                     <PromptInputFooter>
                         <PromptInputTools>
+                            <AttachmentButton disabled={isStreaming || !currentModel?.capabilities?.imageInput} />
                             <ModelSelector open={openModelSelector} onOpenChange={setOpenModelSelector}>
                                 <ModelSelectorTrigger asChild>
                                     <Button

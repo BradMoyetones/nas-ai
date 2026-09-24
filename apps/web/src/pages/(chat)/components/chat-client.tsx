@@ -9,7 +9,7 @@ import { refreshAccessToken } from '@/lib/axios';
 import { useAutoScroll } from '@/hooks/use-auto-scroll';
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport } from 'ai';
-import type { UIMessage } from 'ai';
+import type { UIMessage, FileUIPart } from 'ai';
 import { MessageList } from './message-list';
 import { ChatInput } from './chat-input';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -104,11 +104,15 @@ export default function ChatClient({
                     .map((p) => p.text)
                     .join('') ?? '';
 
+                const fileParts = lastMessage?.parts
+                    ?.filter((p) => p.type === 'file');
+
                 return {
                     body: {
                         content: userContent,
                         conversationId: conversationIdRef.current,
                         modelId: selectedModelRef.current,
+                        ...(fileParts?.length ? { files: fileParts } : {}),
                     },
                 };
             },
@@ -171,8 +175,12 @@ export default function ChatClient({
         setConversationId(initialConvId ?? undefined);
     }, [initialConversation, initialConvId, setMessages]);
 
-    const handleSubmit = (text: string) => {
-        sendMessage({ text });
+    const handleSubmit = (text: string, files?: FileUIPart[]) => {
+        if (files?.length) {
+            sendMessage({ text, files });
+        } else {
+            sendMessage({ text });
+        }
     };
 
     const handleRetry = () => {
