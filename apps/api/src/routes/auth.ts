@@ -1,5 +1,5 @@
-import { Router } from 'express';
-import type { Request, Response } from 'express';
+import { Hono } from 'hono';
+import { getCookie, setCookie } from 'hono/cookie';
 import { prisma } from '../db';
 import { hashPassword, comparePassword } from '../services/auth/password';
 import { generateAccessToken, generateRefreshToken, verifyRefreshToken } from '../services/auth/jwt';
@@ -7,30 +7,29 @@ import { generateVerificationToken, generateLoginCode } from '../services/auth/c
 import { sendVerificationEmail, sendLoginCode } from '../services/auth/email';
 import { requireAuth } from '../middleware/auth';
 import { env } from '../config/env';
+import type { AppEnv } from '../app';
 
-const router = Router();
+const authRouter = new Hono<AppEnv>();
 
 const COOKIE_OPTIONS = {
     httpOnly: true,
     secure: env.NODE_ENV === 'production',
-    sameSite: (env.NODE_ENV === 'production' ? 'none' : 'lax') as 'none' | 'lax',
+    sameSite: (env.NODE_ENV === 'production' ? 'None' : 'Lax') as 'None' | 'Lax',
     path: '/',
     ...(env.COOKIE_DOMAIN ? { domain: env.COOKIE_DOMAIN } : {}),
-};
+} as const;
 
 // ─── REGISTER ────────────────────────────────────────────────────────────────
 
-router.post('/register', async (req: Request, res: Response) => {
-    const { username, email, password } = req.body;
+authRouter.post('/register', async (c) => {
+    const { username, email, password } = await c.req.json();
 
     if (!username || !email || !password) {
-        res.status(400).json({ error: 'Campos username, email y password son requeridos.' });
-        return;
+        return c.json({ error: 'Campos username, email y password son requeridos.' }, 400);
     }
 
     if (password.length < 8) {
-        res.status(400).json({ error: 'La contraseña debe tener al menos 8 caracteres.' });
-        return;
+        return c.json({ error: 'La contraseña debe tener al menos 8 caracteres.' }, 400);
     }
 
     // Verificar si ya existe
@@ -39,8 +38,7 @@ router.post('/register', async (req: Request, res: Response) => {
     });
 
     if (existing) {
-        res.status(409).json({ error: 'El email o nombre de usuario ya están registrados.' });
-        return;
+        return c.json({ error: 'El email o nombre de usuario ya están registrados.' }, 409);
     }
 
     const hashedPassword = await hashPassword(password);
@@ -72,16 +70,16 @@ router.post('/register', async (req: Request, res: Response) => {
         console.error('[auth] Error enviando email de verificación:', err);
     }
 
-    res.status(201).json({
+    return c.json({
         message: 'Registro exitoso. Revisa tu correo electrónico para verificar tu cuenta.',
         user: { id: user.id, username: user.username, email: user.email },
-    });
+    }, 201);
 });
 
 // ─── VERIFY EMAIL ────────────────────────────────────────────────────────────
 
-router.get('/verify-email/:token', async (req: Request, res: Response) => {
-    const { token } = req.params as { token: string };
+authRouter.get('/verify-email/:token', async (c) => {
+    const token = c.req.param('token');
 
     const verification = await prisma.emailVerification.findUnique({
         where: { token },
@@ -89,18 +87,15 @@ router.get('/verify-email/:token', async (req: Request, res: Response) => {
     });
 
     if (!verification) {
-        res.status(404).json({ error: 'Token de verificación no encontrado.' });
-        return;
+        return c.json({ error: 'Token de verificación no encontrado.' }, 404);
     }
 
     if (verification.usedAt) {
-        res.status(400).json({ error: 'Este enlace ya fue utilizado.' });
-        return;
+        return c.json({ error: 'Este enlace ya fue utilizado.' }, 400);
     }
 
     if (new Date() > verification.expiresAt) {
-        res.status(400).json({ error: 'El enlace de verificación ha expirado.' });
-        return;
+        return c.json({ error: 'El enlace de verificación ha expirado.' }, 400);
     }
 
     // Marcar como verificado
@@ -115,17 +110,16 @@ router.get('/verify-email/:token', async (req: Request, res: Response) => {
         }),
     ]);
 
-    res.status(200).json({ message: '¡Correo verificado exitosamente! Ya puedes iniciar sesión.' });
+    return c.json({ message: '¡Correo verificado exitosamente! Ya puedes iniciar sesión.' });
 });
 
 // ─── LOGIN (Step 1: Credentials → Send 2FA Code) ────────────────────────────
 
-router.post('/login', async (req: Request, res: Response) => {
-    const { email, password } = req.body;
+authRouter.post('/login', async (c) => {
+    const { email, password } = await c.req.json();
 
     if (!email || !password) {
-        res.status(400).json({ error: 'Campos email y password son requeridos.' });
-        return;
+        return c.json({ error: 'Campos email y password son requeridos.' }, 400);
     }
 
     const user = await prisma.user.findUnique({
@@ -134,15 +128,13 @@ router.post('/login', async (req: Request, res: Response) => {
     });
 
     if (!user) {
-        res.status(401).json({ error: 'Credenciales inválidas.' });
-        return;
+        return c.json({ error: 'Credenciales inválidas.' }, 401);
     }
 
     // Verificar bloqueo por intentos fallidos
     if (user.auth?.lockedUntil && new Date() < user.auth.lockedUntil) {
         const minutesLeft = Math.ceil((user.auth.lockedUntil.getTime() - Date.now()) / 60000);
-        res.status(429).json({ error: `Cuenta bloqueada temporalmente. Intenta de nuevo en ${minutesLeft} minutos.` });
-        return;
+        return c.json({ error: `Cuenta bloqueada temporalmente. Intenta de nuevo en ${minutesLeft} minutos.` }, 429);
     }
 
     const passwordMatch = await comparePassword(password, user.password);
@@ -160,8 +152,7 @@ router.post('/login', async (req: Request, res: Response) => {
                 },
             });
         }
-        res.status(401).json({ error: 'Credenciales inválidas.' });
-        return;
+        return c.json({ error: 'Credenciales inválidas.' }, 401);
     }
 
     // Resetear intentos fallidos
@@ -189,7 +180,7 @@ router.post('/login', async (req: Request, res: Response) => {
         // No bloqueamos el flujo — el código se creó en la BD correctamente
     }
 
-    res.status(200).json({
+    return c.json({
         message: 'Código de verificación enviado a tu correo electrónico.',
         challenge: {
             id: challenge.id,
@@ -200,12 +191,11 @@ router.post('/login', async (req: Request, res: Response) => {
 
 // ─── LOGIN VERIFY (Step 2: Verify 2FA Code → Issue JWT) ─────────────────────
 
-router.post('/login/verify', async (req: Request, res: Response) => {
-    const { challengeId, code } = req.body;
+authRouter.post('/login/verify', async (c) => {
+    const { challengeId, code } = await c.req.json();
 
     if (!challengeId || !code) {
-        res.status(400).json({ error: 'Campos challengeId y code son requeridos.' });
-        return;
+        return c.json({ error: 'Campos challengeId y code son requeridos.' }, 400);
     }
 
     const challenge = await prisma.loginChallenge.findUnique({
@@ -214,24 +204,20 @@ router.post('/login/verify', async (req: Request, res: Response) => {
     });
 
     if (!challenge) {
-        res.status(404).json({ error: 'Desafío de login no encontrado.' });
-        return;
+        return c.json({ error: 'Desafío de login no encontrado.' }, 404);
     }
 
     if (challenge.usedAt) {
-        res.status(400).json({ error: 'Este código ya fue utilizado.' });
-        return;
+        return c.json({ error: 'Este código ya fue utilizado.' }, 400);
     }
 
     if (new Date() > challenge.expiresAt) {
-        res.status(400).json({ error: 'El código ha expirado. Inicia sesión nuevamente.' });
-        return;
+        return c.json({ error: 'El código ha expirado. Inicia sesión nuevamente.' }, 400);
     }
 
     // Máximo 3 intentos por código
     if (challenge.attempts >= 3) {
-        res.status(429).json({ error: 'Demasiados intentos. Inicia sesión nuevamente.' });
-        return;
+        return c.json({ error: 'Demasiados intentos. Inicia sesión nuevamente.' }, 429);
     }
 
     if (challenge.code !== code) {
@@ -239,8 +225,7 @@ router.post('/login/verify', async (req: Request, res: Response) => {
             where: { id: challenge.id },
             data: { attempts: challenge.attempts + 1 },
         });
-        res.status(401).json({ error: 'Código incorrecto.' });
-        return;
+        return c.json({ error: 'Código incorrecto.' }, 401);
     }
 
     // Código válido — marcar como usado
@@ -261,10 +246,10 @@ router.post('/login/verify', async (req: Request, res: Response) => {
     });
 
     // Setear cookies
-    res.cookie('access_token', accessToken, { ...COOKIE_OPTIONS, maxAge: 15 * 60 * 1000 }); // 15 min
-    res.cookie('refresh_token', refreshToken, { ...COOKIE_OPTIONS, maxAge: 7 * 24 * 60 * 60 * 1000 }); // 7 días
+    setCookie(c, 'access_token', accessToken, { ...COOKIE_OPTIONS, maxAge: 15 * 60 }); // 15 min
+    setCookie(c, 'refresh_token', refreshToken, { ...COOKIE_OPTIONS, maxAge: 7 * 24 * 60 * 60 }); // 7 días
 
-    res.status(200).json({
+    return c.json({
         message: 'Inicio de sesión exitoso.',
         user: {
             id: challenge.user.id,
@@ -275,8 +260,8 @@ router.post('/login/verify', async (req: Request, res: Response) => {
     });
 });
 
-router.get('/login/challenge/:id', async (req: Request, res: Response) => {
-    const { id } = req.params as { id: string };
+authRouter.get('/login/challenge/:id', async (c) => {
+    const id = c.req.param('id');
 
     const challenge = await prisma.loginChallenge.findUnique({
         where: { id },
@@ -284,16 +269,14 @@ router.get('/login/challenge/:id', async (req: Request, res: Response) => {
     });
 
     if (!challenge) {
-        res.status(404).json({ error: 'Challenge no encontrado.' });
-        return;
+        return c.json({ error: 'Challenge no encontrado.' }, 404);
     }
 
     if (new Date() > challenge.expiresAt) {
-        res.status(400).json({ error: 'El challenge ha expirado.' });
-        return;
+        return c.json({ error: 'El challenge ha expirado.' }, 400);
     }
 
-    res.status(200).json({
+    return c.json({
         message: 'Challenge encontrado.',
         challenge: {
             id: challenge.id,
@@ -304,12 +287,11 @@ router.get('/login/challenge/:id', async (req: Request, res: Response) => {
 
 // ─── REFRESH TOKEN ───────────────────────────────────────────────────────────
 
-router.post('/refresh', async (req: Request, res: Response) => {
-    const token = req.cookies?.refresh_token;
+authRouter.post('/refresh', async (c) => {
+    const token = getCookie(c, 'refresh_token');
 
     if (!token) {
-        res.status(401).json({ error: 'No hay refresh token.' });
-        return;
+        return c.json({ error: 'No hay refresh token.' }, 401);
     }
 
     try {
@@ -322,8 +304,7 @@ router.post('/refresh', async (req: Request, res: Response) => {
         });
 
         if (!auth || auth.refreshToken !== token) {
-            res.status(401).json({ error: 'Refresh token inválido.' });
-            return;
+            return c.json({ error: 'Refresh token inválido.' }, 401);
         }
 
         // Generar nuevo access token
@@ -336,36 +317,40 @@ router.post('/refresh', async (req: Request, res: Response) => {
             data: { refreshToken: newRefreshToken },
         });
 
-        res.cookie('access_token', newAccessToken, { ...COOKIE_OPTIONS, maxAge: 15 * 60 * 1000 });
-        res.cookie('refresh_token', newRefreshToken, { ...COOKIE_OPTIONS, maxAge: 7 * 24 * 60 * 60 * 1000 });
+        setCookie(c, 'access_token', newAccessToken, { ...COOKIE_OPTIONS, maxAge: 15 * 60 });
+        setCookie(c, 'refresh_token', newRefreshToken, { ...COOKIE_OPTIONS, maxAge: 7 * 24 * 60 * 60 });
 
-        res.status(200).json({ message: 'Token renovado exitosamente.' });
+        return c.json({ message: 'Token renovado exitosamente.' });
     } catch {
-        res.status(401).json({ error: 'Refresh token expirado. Inicia sesión nuevamente.' });
+        return c.json({ error: 'Refresh token expirado. Inicia sesión nuevamente.' }, 401);
     }
 });
 
 // ─── LOGOUT ──────────────────────────────────────────────────────────────────
 
-router.post('/logout', requireAuth, async (req: Request, res: Response) => {
+authRouter.post('/logout', requireAuth, async (c) => {
+    const user = c.get('user');
+
     // Revocar refresh token en BD
     await prisma.userAuth.update({
-        where: { userId: req.user!.userId },
+        where: { userId: user.userId },
         data: { refreshToken: null },
     });
 
     // Limpiar cookies
-    res.clearCookie('access_token', COOKIE_OPTIONS);
-    res.clearCookie('refresh_token', COOKIE_OPTIONS);
+    setCookie(c, 'access_token', '', { ...COOKIE_OPTIONS, maxAge: 0 });
+    setCookie(c, 'refresh_token', '', { ...COOKIE_OPTIONS, maxAge: 0 });
 
-    res.status(200).json({ message: 'Sesión cerrada exitosamente.' });
+    return c.json({ message: 'Sesión cerrada exitosamente.' });
 });
 
 // ─── ME (Current User) ──────────────────────────────────────────────────────
 
-router.get('/me', requireAuth, async (req: Request, res: Response) => {
+authRouter.get('/me', requireAuth, async (c) => {
+    const authUser = c.get('user');
+
     const user = await prisma.user.findUnique({
-        where: { id: req.user!.userId },
+        where: { id: authUser.userId },
         select: {
             id: true,
             username: true,
@@ -376,11 +361,10 @@ router.get('/me', requireAuth, async (req: Request, res: Response) => {
     });
 
     if (!user) {
-        res.status(404).json({ error: 'Usuario no encontrado.' });
-        return;
+        return c.json({ error: 'Usuario no encontrado.' }, 404);
     }
 
-    res.status(200).json({ user });
+    return c.json({ user });
 });
 
-export { router as authRouter };
+export { authRouter };

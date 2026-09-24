@@ -1,37 +1,40 @@
-import { Router } from 'express';
-import type { Request, Response } from 'express';
+import { Hono } from 'hono';
 import { prisma } from '../db';
+import type { AppEnv } from '../app';
 
-const router = Router();
+const conversationsRouter = new Hono<AppEnv>();
 
 // ─── GET ALL CONVERSATIONS FOR CURRENT USER ──────────────────────────────
-router.get('/', async (req: Request, res: Response) => {
+conversationsRouter.get('/', async (c) => {
     try {
+        const user = c.get('user');
+
         const conversations = await prisma.conversation.findMany({
             where: {
-                userId: req.user!.userId
+                userId: user.userId
             },
             orderBy: {
                 createdAt: 'desc'
             }
         });
 
-        res.status(200).json({ conversations });
+        return c.json({ conversations });
     } catch (error: any) {
         console.error('[conversations] GET / error:', error);
-        res.status(500).json({ error: 'Error al obtener conversaciones' });
+        return c.json({ error: 'Error al obtener conversaciones' }, 500);
     }
 });
 
 // ─── GET SPECIFIC CONVERSATION ───────────────────────────────────────────
-router.get('/:id', async (req: Request, res: Response) => {
+conversationsRouter.get('/:id', async (c) => {
     try {
-        const { id } = req.params as { id: string };
+        const id = c.req.param('id');
+        const user = c.get('user');
 
         const conversation = await prisma.conversation.findFirst({
             where: {
                 id,
-                userId: req.user!.userId
+                userId: user.userId
             },
             include: {
                 messages: {
@@ -43,53 +46,54 @@ router.get('/:id', async (req: Request, res: Response) => {
         });
 
         if (!conversation) {
-            res.status(404).json({ error: 'Conversación no encontrada' });
-            return;
+            return c.json({ error: 'Conversación no encontrada' }, 404);
         }
 
-        res.status(200).json({ conversation });
+        return c.json({ conversation });
     } catch (error: any) {
-        console.error(`[conversations] GET /${req.params.id} error:`, error);
-        res.status(500).json({ error: 'Error al obtener conversación' });
+        console.error(`[conversations] GET /${c.req.param('id')} error:`, error);
+        return c.json({ error: 'Error al obtener conversación' }, 500);
     }
 });
 
 // ─── POST CREATE CONVERSATION ────────────────────────────────────────────
-router.post('/', async (req: Request, res: Response) => {
+conversationsRouter.post('/', async (c) => {
     try {
-        const { title } = req.body;
+        const { title } = await c.req.json();
+        const user = c.get('user');
 
         const conversation = await prisma.conversation.create({
             data: {
-                userId: req.user!.userId,
+                userId: user.userId,
                 title: title || 'Nueva conversación'
             }
         });
 
-        res.status(201).json({ conversation });
+        return c.json({ conversation }, 201);
     } catch (error: any) {
         console.error('[conversations] POST / error:', error);
-        res.status(500).json({ error: 'Error al crear conversación' });
+        return c.json({ error: 'Error al crear conversación' }, 500);
     }
 });
 
 // ─── DELETE CONVERSATION ────────────────────────────────────────────
-router.delete('/:id', async (req: Request, res: Response) => {
+conversationsRouter.delete('/:id', async (c) => {
     try {
-        const { id } = req.params as { id: string };
+        const id = c.req.param('id');
+        const user = c.get('user');
 
         await prisma.conversation.delete({
             where: {
                 id,
-                userId: req.user!.userId
+                userId: user.userId
             }
         });
 
-        res.status(200).json({ message: 'Conversación eliminada' });
+        return c.json({ message: 'Conversación eliminada' });
     } catch (error: any) {
-        console.error(`[conversations] DELETE /${req.params.id} error:`, error);
-        res.status(500).json({ error: 'Error al eliminar conversación' });
+        console.error(`[conversations] DELETE /${c.req.param('id')} error:`, error);
+        return c.json({ error: 'Error al eliminar conversación' }, 500);
     }
 });
 
-export { router as conversationsRouter };
+export { conversationsRouter };

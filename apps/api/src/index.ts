@@ -1,3 +1,4 @@
+import { serve } from '@hono/node-server';
 import { app } from './app';
 import { env } from './config/env';
 import { prisma } from './db';
@@ -8,8 +9,8 @@ async function main() {
         await prisma.$connect();
         console.log('✅ Conectado a la base de datos (SQLite via Prisma)');
 
-        const server = app.listen(env.PORT, () => {
-            console.log(`🚀 Servidor NAS API corriendo en http://localhost:${env.PORT}`);
+        const server = serve({ fetch: app.fetch, port: Number(env.PORT) }, (info) => {
+            console.log(`🚀 Servidor NAS API corriendo en http://localhost:${info.port}`);
         });
 
         // Manejo de cierres limpios

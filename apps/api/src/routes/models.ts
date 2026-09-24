@@ -1,21 +1,21 @@
-import { Router } from 'express';
+import { Hono } from 'hono';
 import { modelCatalog } from '../services/ai/providers';
 import { hasGroqKey } from '@/services/ai/groq';
 import { hasOpenRouterKey } from '@/services/ai/openrouter';
 import { hasCerebrasKey } from '@/services/ai/cerebras';
 import { ai, hasGoogleKey } from '@/services/ai/google';
 import { env } from '@/config/env';
+import type { AppEnv } from '../app';
 
-const router = Router();
+const modelsRouter = new Hono<AppEnv>();
 
-router.get('/', (req, res) => {
-    res.status(200).json({ categories: modelCatalog });
+modelsRouter.get('/', (c) => {
+    return c.json({ categories: modelCatalog });
 });
 
-router.get('/groq', async (req, res) => {
+modelsRouter.get('/groq', async (c) => {
     if (!hasGroqKey()) {
-        res.status(400).json({ message: 'GROQ_API_KEY not configured' });
-        return;
+        return c.json({ message: 'GROQ_API_KEY not configured' }, 400);
     }
 
     const response = await fetch('https://api.groq.com/openai/v1/models', {
@@ -27,17 +27,15 @@ router.get('/groq', async (req, res) => {
     });
 
     if (!response.ok) {
-        res.status(400).json({ message: 'Error al obtener modelos de Groq' });
-        return;
+        return c.json({ message: 'Error al obtener modelos de Groq' }, 400);
     }
 
-    res.status(200).json(await response.json());
+    return c.json(await response.json());
 });
 
-router.get('/openrouter', async (req, res) => {
+modelsRouter.get('/openrouter', async (c) => {
     if (!hasOpenRouterKey()) {
-        res.status(400).json({ message: 'OPENROUTER_API_KEY not configured' });
-        return;
+        return c.json({ message: 'OPENROUTER_API_KEY not configured' }, 400);
     }
 
     const response = await fetch('https://openrouter.ai/api/v1/models', {
@@ -49,33 +47,30 @@ router.get('/openrouter', async (req, res) => {
     });
 
     if (!response.ok) {
-        res.status(400).json({ message: 'Error al obtener modelos de OpenRouter' });
-        return;
+        return c.json({ message: 'Error al obtener modelos de OpenRouter' }, 400);
     }
 
     const data = await response.json();
     // Only return when id includes :free
     const filteredFreeModels = data.data.filter((model: { id: string }) => model.id.includes(':free'));
 
-    res.status(200).json(filteredFreeModels);
+    return c.json(filteredFreeModels);
 });
 
-router.get('/cerebras', (req, res) => {
+modelsRouter.get('/cerebras', (c) => {
     if (!hasCerebrasKey()) {
-        res.status(400).json({ message: 'CEREBRAS_API_KEY not configured' });
-        return;
+        return c.json({ message: 'CEREBRAS_API_KEY not configured' }, 400);
     }
-    res.status(200).json({ ok: false });
+    return c.json({ ok: false });
 });
 
-router.get('/google', async (req, res) => {
+modelsRouter.get('/google', async (c) => {
     if (!hasGoogleKey()) {
-        res.status(400).json({ message: 'GEMINI_API_KEY not configured' });
-        return;
+        return c.json({ message: 'GEMINI_API_KEY not configured' }, 400);
     }
 
     const models = await ai.models.list();
-    res.status(200).json(models);
+    return c.json(models);
 });
 
-export { router as modelsRouter };
+export { modelsRouter };

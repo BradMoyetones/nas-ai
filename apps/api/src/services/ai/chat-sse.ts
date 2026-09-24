@@ -1,5 +1,3 @@
-import type { Response } from 'express';
-
 import type { ChatStreamEvent } from '@nas/shared';
 
 /**
@@ -44,44 +42,40 @@ function serializeSseEvent(
 }
 
 /**
- * Escribe un evento SSE tipado en la respuesta.
+ * Escribe un evento SSE tipado en un WritableStreamDefaultWriter.
  *
- * Devuelve false si la conexión ya no está disponible.
+ * Devuelve false si el writer no está disponible o el stream está cerrado.
  */
 export function writeChatStreamEvent<
     E extends ChatStreamEvent['event'],
 >(
-    res: Response,
+    writer: WritableStreamDefaultWriter<Uint8Array>,
     event: E,
     data: ChatStreamData<E>,
 ): boolean {
-    if (
-        res.writableEnded ||
-        res.destroyed
-    ) {
-        return false;
-    }
-
     const payload = serializeSseEvent({
         event,
         data,
     } as ChatStreamEvent);
 
-    res.write(payload);
-
-    return true;
+    try {
+        const encoded = new TextEncoder().encode(payload);
+        writer.write(encoded);
+        return true;
+    } catch {
+        return false;
+    }
 }
 
 /**
  * Finaliza de forma segura la conexión SSE.
  */
 export function endChatStream(
-    res: Response
+    writer: WritableStreamDefaultWriter<Uint8Array>,
 ): void {
-    if (
-        !res.writableEnded &&
-        !res.destroyed
-    ) {
-        res.end();
+    try {
+        writer.close();
+    } catch {
+        // Already closed
     }
 }

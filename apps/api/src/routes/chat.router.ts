@@ -1,5 +1,4 @@
-import { Router } from 'express';
-import type { Request, Response } from 'express';
+import { Hono } from 'hono';
 
 import { getModelById } from '../services/ai/providers';
 import { streamFromProvider } from '../services/ai/engine';
@@ -8,13 +7,15 @@ import { buildContext } from '../services/ai/context-builder';
 import { generateConversationTitle } from '../services/ai/conversation-title.service';
 import { normalizeGenerationError, generationErrorToMetadata, isAbortError } from '../services/ai/generation-error';
 import { endChatStream, writeChatStreamEvent } from '../services/ai/chat-sse';
+import type { AppEnv } from '../app';
 
-const router = Router();
+const chatRouter = new Hono<AppEnv>();
 
-router.post('/', async (req: Request, res: Response) => {
+chatRouter.post('/', async (c) => {
     const startedAt = Date.now();
+    const user = c.get('user');
 
-    let { content, conversationId, modelId } = req.body;
+    let { content, conversationId, modelId } = await c.req.json();
 
     /*
      * ============================================================
@@ -26,9 +27,9 @@ router.post('/', async (req: Request, res: Response) => {
      */
 
     if (typeof content !== 'string' || content.trim() === '') {
-        return res.status(400).json({
+        return c.json({
             error: 'content is required and must be a non-empty string.',
-        });
+        }, 400);
     }
 
     const targetModelId = modelId || 'openai/gpt-oss-120b';
@@ -36,12 +37,12 @@ router.post('/', async (req: Request, res: Response) => {
     const selectedModel = getModelById(targetModelId);
 
     if (!selectedModel) {
-        return res.status(404).json({
+        return c.json({
             error: `Model not found: ${targetModelId}`,
-        });
+        }, 404);
     }
 
-    const userId = req.user!.userId;
+    const userId = user.userId;
 
     /*
      * ============================================================
@@ -62,456 +63,410 @@ router.post('/', async (req: Request, res: Response) => {
 
     const abortController = new AbortController();
 
-    try {
-        /*
-         * ========================================================
-         * Obtener / crear conversación
-         * ========================================================
-         */
+    /*
+     * ============================================================
+     * Web Stream para SSE
+     * ============================================================
+     */
 
-        if (conversationId) {
-            const conversation = await conversationService.getByIdForUser(conversationId, userId);
+    const { readable, writable } = new TransformStream<Uint8Array>();
+    const writer = writable.getWriter();
 
-            if (!conversation) {
-                return res.status(404).json({
-                    error: 'Conversation not found',
-                });
+    /*
+     * Procesamos la generación en background mientras
+     * retornamos el readable stream al cliente.
+     */
+    const processingPromise = (async () => {
+        try {
+            /*
+             * ========================================================
+             * Obtener / crear conversación
+             * ========================================================
+             */
+
+            if (conversationId) {
+                const conversation = await conversationService.getByIdForUser(conversationId, userId);
+
+                if (!conversation) {
+                    // SSE no abierto aún — pero ya estamos en el stream,
+                    // así que cerramos el writer
+                    const encoder = new TextEncoder();
+                    writer.write(encoder.encode(
+                        `event: error\ndata: ${JSON.stringify({ error: 'Conversation not found' })}\n\n`
+                    ));
+                    writer.close();
+                    return;
+                }
+            } else {
+                conversationTitle = 'New conversation';
+
+                const conversation = await conversationService.create(userId, conversationTitle);
+
+                conversationId = conversation.id;
+
+                isNewConversation = true;
             }
-        } else {
-            conversationTitle = 'New conversation';
 
-            const conversation = await conversationService.create(userId, conversationTitle);
+            /*
+             * ========================================================
+             * Guardar mensaje del usuario
+             * ========================================================
+             */
 
-            conversationId = conversation.id;
-
-            isNewConversation = true;
-        }
-
-        /*
-         * ========================================================
-         * Guardar mensaje del usuario
-         * ========================================================
-         */
-
-        await conversationService.addMessage(conversationId, {
-            role: 'user',
-            content,
-        });
-
-        /*
-         * ========================================================
-         * Obtener historial
-         * ========================================================
-         */
-
-        const history = await conversationService.getMessages(conversationId);
-
-        /*
-         * ========================================================
-         * Construir contexto
-         * ========================================================
-         */
-
-        const contextMessages = buildContext(history);
-
-        /*
-         * ========================================================
-         * Abrir SSE
-         * ========================================================
-         *
-         * MUY IMPORTANTE:
-         *
-         * Desde este punto la generación ya no debe responder
-         * con res.status().json().
-         *
-         * Los errores deben viajar como eventos SSE.
-         */
-
-        res.writeHead(200, {
-            'Content-Type': 'text/event-stream; charset=utf-8',
-
-            'Cache-Control': 'no-cache, no-transform',
-
-            Connection: 'keep-alive',
-
-            'X-Accel-Buffering': 'no',
-        });
-
-        /*
-         * Fuerza el envío inmediato de los headers.
-         * Esto ayuda a que el cliente establezca el stream
-         * antes de que llegue la generación.
-         */
-
-        res.flushHeaders();
-
-        /*
-         * ========================================================
-         * Detectar desconexión del cliente
-         * ========================================================
-         *
-         * Escuchamos la respuesta, no la request.
-         */
-
-        res.once('close', () => {
-            if (!res.writableEnded) {
-                abortController.abort();
-
-                console.log(`[chat] Client disconnected for conversation ${conversationId}`);
-            }
-        });
-
-        /*
-         * ========================================================
-         * Crear conversación
-         * ========================================================
-         */
-
-        if (isNewConversation) {
-            writeChatStreamEvent(res, 'conversation.created', {
-                id: conversationId,
-                title: conversationTitle,
+            await conversationService.addMessage(conversationId, {
+                role: 'user',
+                content,
             });
 
             /*
-             * El título es independiente de la generación principal.
-             *
-             * Si falla, no debe romper el chat.
+             * ========================================================
+             * Obtener historial
+             * ========================================================
              */
 
-            titleGenerationPromise = generateConversationTitle({
-                content,
-                model: selectedModel,
-                signal: abortController.signal,
-            })
-                .then(async (title) => {
-                    await conversationService.updateTitle(conversationId!, title);
+            const history = await conversationService.getMessages(conversationId);
 
-                    writeChatStreamEvent(res, 'conversation.title', {
-                        id: conversationId!,
-                        title,
-                    });
+            /*
+             * ========================================================
+             * Construir contexto
+             * ========================================================
+             */
+
+            const contextMessages = buildContext(history);
+
+            /*
+             * ========================================================
+             * Crear conversación
+             * ========================================================
+             */
+
+            if (isNewConversation) {
+                writeChatStreamEvent(writer, 'conversation.created', {
+                    id: conversationId,
+                    title: conversationTitle,
+                });
+
+                /*
+                 * El título es independiente de la generación principal.
+                 *
+                 * Si falla, no debe romper el chat.
+                 */
+
+                titleGenerationPromise = generateConversationTitle({
+                    content,
+                    model: selectedModel,
+                    signal: abortController.signal,
                 })
-                .catch((error) => {
-                    if (isAbortError(error)) {
-                        return;
+                    .then(async (title) => {
+                        await conversationService.updateTitle(conversationId!, title);
+
+                        writeChatStreamEvent(writer, 'conversation.title', {
+                            id: conversationId!,
+                            title,
+                        });
+                    })
+                    .catch((error) => {
+                        if (isAbortError(error)) {
+                            return;
+                        }
+
+                        console.error('[chat] Error generating conversation title:', error);
+                    });
+            }
+
+            /*
+             * ========================================================
+             * Estado de generación
+             * ========================================================
+             */
+
+            let chunkCount = 0;
+
+            let fullAssistantContent = '';
+
+            let totalReasoningTokens: number | undefined;
+
+            /*
+             * ========================================================
+             * GENERACIÓN
+             * ========================================================
+             *
+             * Los errores del provider se manejan aquí.
+             */
+
+            try {
+                const stream = await streamFromProvider({
+                    messages: contextMessages,
+
+                    model: selectedModel,
+
+                    signal: abortController.signal,
+                });
+
+                for await (const chunk of stream) {
+                    /*
+                     * Si el cliente ya se desconectó,
+                     * no seguimos procesando.
+                     */
+
+                    if (abortController.signal.aborted) {
+                        throw new Error('Request aborted');
                     }
 
-                    console.error('[chat] Error generating conversation title:', error);
+                    chunkCount++;
+
+                    /*
+                     * ------------------------------------------------
+                     * Texto generado
+                     * ------------------------------------------------
+                     */
+
+                    if (chunk.content) {
+                        fullAssistantContent += chunk.content;
+
+                        writeChatStreamEvent(writer, 'message.delta', {
+                            content: chunk.content,
+                        });
+                    }
+
+                    /*
+                     * ------------------------------------------------
+                     * Reasoning tokens
+                     * ------------------------------------------------
+                     */
+
+                    if (chunk.reasoningTokens !== undefined) {
+                        totalReasoningTokens = (totalReasoningTokens ?? 0) + chunk.reasoningTokens;
+                    }
+                }
+
+                /*
+                 * ====================================================
+                 * Guardar respuesta exitosa
+                 * ====================================================
+                 */
+
+                const assistantMsg = await conversationService.addMessage(conversationId, {
+                    role: 'assistant',
+
+                    content: fullAssistantContent,
+
+                    model: selectedModel.id,
+
+                    provider: selectedModel.provider,
                 });
-        }
 
-        /*
-         * ========================================================
-         * Estado de generación
-         * ========================================================
-         */
-
-        let chunkCount = 0;
-
-        let fullAssistantContent = '';
-
-        let totalReasoningTokens: number | undefined;
-
-        /*
-         * ========================================================
-         * GENERACIÓN
-         * ========================================================
-         *
-         * Los errores del provider se manejan aquí.
-         */
-
-        try {
-            const stream = await streamFromProvider({
-                messages: contextMessages,
-
-                model: selectedModel,
-
-                signal: abortController.signal,
-            });
-
-            for await (const chunk of stream) {
                 /*
-                 * Si el cliente ya se desconectó,
-                 * no seguimos procesando.
+                 * ====================================================
+                 * message.completed
+                 * ====================================================
                  */
 
-                if (abortController.signal.aborted) {
-                    throw new Error('Request aborted');
+                writeChatStreamEvent(writer, 'message.completed', {
+                    messageId: assistantMsg.id,
+
+                    model: selectedModel.id,
+
+                    provider: selectedModel.provider,
+
+                    usage:
+                        totalReasoningTokens !== undefined
+                            ? {
+                                  reasoningTokens: totalReasoningTokens,
+                              }
+                            : undefined,
+                });
+
+                /*
+                 * ====================================================
+                 * Título
+                 * ====================================================
+                 *
+                 * Solo necesitamos esperar el título cuando la
+                 * generación principal terminó correctamente.
+                 */
+
+                if (titleGenerationPromise) {
+                    await titleGenerationPromise;
                 }
 
-                chunkCount++;
-
                 /*
-                 * ------------------------------------------------
-                 * Texto generado
-                 * ------------------------------------------------
+                 * ====================================================
+                 * generation.done
+                 * ====================================================
                  */
 
-                if (chunk.content) {
-                    fullAssistantContent += chunk.content;
+                writeChatStreamEvent(writer, 'generation.done', {
+                    status: 'success',
 
-                    writeChatStreamEvent(res, 'message.delta', {
-                        content: chunk.content,
+                    elapsedMs: Date.now() - startedAt,
+
+                    chunkCount,
+                });
+            } catch (error) {
+                /*
+                 * ====================================================
+                 * ABORT
+                 * ====================================================
+                 */
+
+                if (isAbortError(error) || abortController.signal.aborted) {
+                    console.log(`[chat] Generation aborted for conversation ${conversationId}`);
+
+                    return;
+                }
+
+                /*
+                 * ====================================================
+                 * NORMALIZAR ERROR DEL PROVIDER
+                 * ====================================================
+                 */
+
+                const generationError = normalizeGenerationError(error, selectedModel);
+
+                /*
+                 * ====================================================
+                 * LOG TÉCNICO
+                 * ====================================================
+                 */
+
+                console.error('[chat] Generation failed', {
+                    conversationId,
+
+                    model: selectedModel.id,
+
+                    provider: selectedModel.provider,
+
+                    code: generationError.code,
+
+                    status: generationError.status,
+
+                    providerCode: generationError.providerCode,
+
+                    retryable: generationError.retryable,
+
+                    requestId: generationError.requestId,
+
+                    message: generationError.message,
+
+                    error,
+
+                    stack: error instanceof Error ? error.stack : undefined,
+                });
+
+                /*
+                 * ====================================================
+                 * Metadata persistible
+                 * ====================================================
+                 */
+
+                const metadata = generationErrorToMetadata(generationError);
+
+                /*
+                 * ====================================================
+                 * Guardar mensaje de error
+                 * ====================================================
+                 *
+                 * Si ya recibimos parte de la generación antes de que
+                 * el provider fallara, conservamos ese contenido.
+                 *
+                 * Si no recibimos ningún chunk, usamos el mensaje
+                 * amigable de error.
+                 */
+
+                let errorMessageId: string | undefined;
+
+                try {
+                    const errorMessage = await conversationService.addMessage(conversationId, {
+                        role: 'assistant',
+
+                        content: fullAssistantContent || generationError.userMessage,
+
+                        model: selectedModel.id,
+
+                        provider: selectedModel.provider,
+
+                        metadata,
                     });
+
+                    errorMessageId = errorMessage.id;
+                } catch (dbError) {
+                    /*
+                     * El manejo del error no puede fallar solo porque
+                     * la persistencia del propio error haya fallado.
+                     */
+
+                    console.error('[chat] Failed to persist generation error message:', dbError);
                 }
 
                 /*
-                 * ------------------------------------------------
-                 * Reasoning tokens
-                 * ------------------------------------------------
+                 * ====================================================
+                 * SSE: message.error
+                 * ====================================================
                  */
 
-                if (chunk.reasoningTokens !== undefined) {
-                    totalReasoningTokens = (totalReasoningTokens ?? 0) + chunk.reasoningTokens;
-                }
+                writeChatStreamEvent(writer, 'message.error', {
+                    messageId: errorMessageId,
+
+                    model: selectedModel.id,
+
+                    provider: selectedModel.provider,
+
+                    code: generationError.code,
+
+                    status: generationError.status,
+
+                    message: generationError.userMessage,
+
+                    retryable: generationError.retryable,
+                });
+
+                /*
+                 * ====================================================
+                 * SSE: generation.done
+                 * ====================================================
+                 */
+
+                writeChatStreamEvent(writer, 'generation.done', {
+                    status: 'error',
+
+                    elapsedMs: Date.now() - startedAt,
+
+                    chunkCount,
+                });
             }
-
-            /*
-             * ====================================================
-             * Guardar respuesta exitosa
-             * ====================================================
-             */
-
-            const assistantMsg = await conversationService.addMessage(conversationId, {
-                role: 'assistant',
-
-                content: fullAssistantContent,
-
-                model: selectedModel.id,
-
-                provider: selectedModel.provider,
-            });
-
-            /*
-             * ====================================================
-             * message.completed
-             * ====================================================
-             */
-
-            writeChatStreamEvent(res, 'message.completed', {
-                messageId: assistantMsg.id,
-
-                model: selectedModel.id,
-
-                provider: selectedModel.provider,
-
-                usage:
-                    totalReasoningTokens !== undefined
-                        ? {
-                              reasoningTokens: totalReasoningTokens,
-                          }
-                        : undefined,
-            });
-
-            /*
-             * ====================================================
-             * Título
-             * ====================================================
-             *
-             * Solo necesitamos esperar el título cuando la
-             * generación principal terminó correctamente.
-             */
-
-            if (titleGenerationPromise) {
-                await titleGenerationPromise;
-            }
-
-            /*
-             * ====================================================
-             * generation.done
-             * ====================================================
-             */
-
-            writeChatStreamEvent(res, 'generation.done', {
-                status: 'success',
-
-                elapsedMs: Date.now() - startedAt,
-
-                chunkCount,
-            });
         } catch (error) {
             /*
-             * ====================================================
-             * ABORT
-             * ====================================================
+             * ========================================================
+             * ERROR DE INFRAESTRUCTURA
+             * ========================================================
+             *
+             * Aquí pueden aparecer errores inesperados de:
+             *
+             * - DB
+             * - context builder
+             * - conversation service
+             * - lógica del router
              */
 
             if (isAbortError(error) || abortController.signal.aborted) {
-                console.log(`[chat] Generation aborted for conversation ${conversationId}`);
-
+                console.log(`[chat] Request aborted for conversation ${conversationId}`);
                 return;
             }
 
-            /*
-             * ====================================================
-             * NORMALIZAR ERROR DEL PROVIDER
-             * ====================================================
-             */
-
-            const generationError = normalizeGenerationError(error, selectedModel);
-
-            /*
-             * ====================================================
-             * LOG TÉCNICO
-             * ====================================================
-             */
-
-            console.error('[chat] Generation failed', {
+            console.error('[chat] Unexpected chat error', {
                 conversationId,
 
                 model: selectedModel.id,
 
                 provider: selectedModel.provider,
 
-                code: generationError.code,
-
-                status: generationError.status,
-
-                providerCode: generationError.providerCode,
-
-                retryable: generationError.retryable,
-
-                requestId: generationError.requestId,
-
-                message: generationError.message,
-
                 error,
 
                 stack: error instanceof Error ? error.stack : undefined,
             });
 
-            /*
-             * ====================================================
-             * Metadata persistible
-             * ====================================================
-             */
-
-            const metadata = generationErrorToMetadata(generationError);
-
-            /*
-             * ====================================================
-             * Guardar mensaje de error
-             * ====================================================
-             *
-             * Si ya recibimos parte de la generación antes de que
-             * el provider fallara, conservamos ese contenido.
-             *
-             * Si no recibimos ningún chunk, usamos el mensaje
-             * amigable de error.
-             */
-
-            let errorMessageId: string | undefined;
-
-            try {
-                const errorMessage = await conversationService.addMessage(conversationId, {
-                    role: 'assistant',
-
-                    content: fullAssistantContent || generationError.userMessage,
-
-                    model: selectedModel.id,
-
-                    provider: selectedModel.provider,
-
-                    metadata,
-                });
-
-                errorMessageId = errorMessage.id;
-            } catch (dbError) {
-                /*
-                 * El manejo del error no puede fallar solo porque
-                 * la persistencia del propio error haya fallado.
-                 */
-
-                console.error('[chat] Failed to persist generation error message:', dbError);
-            }
-
-            /*
-             * ====================================================
-             * SSE: message.error
-             * ====================================================
-             */
-
-            writeChatStreamEvent(res, 'message.error', {
-                messageId: errorMessageId,
-
-                model: selectedModel.id,
-
-                provider: selectedModel.provider,
-
-                code: generationError.code,
-
-                status: generationError.status,
-
-                message: generationError.userMessage,
-
-                retryable: generationError.retryable,
-            });
-
-            /*
-             * ====================================================
-             * SSE: generation.done
-             * ====================================================
-             */
-
-            writeChatStreamEvent(res, 'generation.done', {
-                status: 'error',
-
-                elapsedMs: Date.now() - startedAt,
-
-                chunkCount,
-            });
-        }
-    } catch (error) {
-        /*
-         * ========================================================
-         * ERROR DE INFRAESTRUCTURA
-         * ========================================================
-         *
-         * Este catch es distinto del anterior.
-         *
-         * Aquí pueden aparecer errores inesperados de:
-         *
-         * - DB
-         * - context builder
-         * - conversation service
-         * - lógica del router
-         *
-         * Si SSE ya comenzó:
-         *     → SSE
-         *
-         * Si SSE todavía no comenzó:
-         *     → HTTP
-         */
-
-        if (isAbortError(error) || abortController.signal.aborted) {
-            console.log(`[chat] Request aborted for conversation ${conversationId}`);
-
-            endChatStream(res);
-
-            return;
-        }
-
-        console.error('[chat] Unexpected chat error', {
-            conversationId,
-
-            model: selectedModel.id,
-
-            provider: selectedModel.provider,
-
-            error,
-
-            stack: error instanceof Error ? error.stack : undefined,
-        });
-
-        /*
-         * ========================================================
-         * SSE YA ABIERTO
-         * ========================================================
-         */
-
-        if (res.headersSent) {
-            writeChatStreamEvent(res, 'message.error', {
+            writeChatStreamEvent(writer, 'message.error', {
                 model: selectedModel.id,
 
                 provider: selectedModel.provider,
@@ -523,37 +478,42 @@ router.post('/', async (req: Request, res: Response) => {
                 retryable: true,
             });
 
-            writeChatStreamEvent(res, 'generation.done', {
+            writeChatStreamEvent(writer, 'generation.done', {
                 status: 'error',
 
                 elapsedMs: Date.now() - startedAt,
 
                 chunkCount: 0,
             });
+        } finally {
+            /*
+             * ============================================================
+             * Cierre defensivo
+             * ============================================================
+             */
 
-            endChatStream(res);
-
-            return;
+            endChatStream(writer);
         }
+    })();
 
-        /*
-         * ========================================================
-         * SSE TODAVÍA NO ABIERTO
-         * ========================================================
-         */
+    /*
+     * Detectar desconexión del cliente.
+     * Hono no tiene un 'close' event en el request,
+     * pero podemos detectar cuando el readable stream se cancela.
+     */
+    c.req.raw.signal.addEventListener('abort', () => {
+        abortController.abort();
+        console.log(`[chat] Client disconnected for conversation ${conversationId}`);
+    });
 
-        return res.status(500).json({
-            error: error instanceof Error ? error.message : 'Internal server error',
-        });
-    } finally {
-        /*
-         * ============================================================
-         * Cierre defensivo
-         * ============================================================
-         */
-
-        endChatStream(res);
-    }
+    return new Response(readable, {
+        headers: {
+            'Content-Type': 'text/event-stream; charset=utf-8',
+            'Cache-Control': 'no-cache, no-transform',
+            'Connection': 'keep-alive',
+            'X-Accel-Buffering': 'no',
+        },
+    });
 });
 
-export { router as chatRouter };
+export { chatRouter };

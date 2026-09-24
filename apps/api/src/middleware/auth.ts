@@ -1,38 +1,26 @@
-import type { Request, Response, NextFunction } from 'express';
+import type { Context, Next } from 'hono';
+import { getCookie } from 'hono/cookie';
 import { verifyAccessToken } from '../services/auth/jwt';
 import { prisma } from '../db';
-
-// Extender la interfaz Request de Express para incluir el usuario autenticado
-declare global {
-    namespace Express {
-        interface Request {
-            user?: {
-                userId: string;
-                email: string;
-            };
-        }
-    }
-}
+import type { AppEnv } from '../app';
 
 /**
  * Middleware que verifica que el request tenga un JWT válido en la cookie `access_token`.
- * Si es válido, inyecta `req.user` con { userId, email }.
+ * Si es válido, inyecta `c.var.user` con { userId, email }.
  */
-export async function requireAuth(req: Request, res: Response, next: NextFunction) {
-    const token = req.cookies?.access_token;
+export async function requireAuth(c: Context<AppEnv>, next: Next) {
+    const token = getCookie(c, 'access_token');
 
     if (!token) {
-        res.status(401).json({ error: 'No autenticado. Inicia sesión.' });
-        return;
+        return c.json({ error: 'No autenticado. Inicia sesión.' }, 401);
     }
 
     try {
         const payload = verifyAccessToken(token);
-        req.user = { userId: payload.userId, email: payload.email };
-        next();
+        c.set('user', { userId: payload.userId, email: payload.email });
+        await next();
     } catch {
-        res.status(401).json({ error: 'Token inválido o expirado. Inicia sesión nuevamente.' });
-        return;
+        return c.json({ error: 'Token inválido o expirado. Inicia sesión nuevamente.' }, 401);
     }
 }
 
@@ -40,26 +28,25 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
  * Middleware que además de autenticar, verifica que el usuario tenga su email verificado.
  * Debe usarse DESPUÉS de `requireAuth`.
  */
-export async function requireVerified(req: Request, res: Response, next: NextFunction) {
-    if (!req.user) {
-        res.status(401).json({ error: 'No autenticado.' });
-        return;
+export async function requireVerified(c: Context<AppEnv>, next: Next) {
+    const user = c.get('user');
+
+    if (!user) {
+        return c.json({ error: 'No autenticado.' }, 401);
     }
 
-    const user = await prisma.user.findUnique({
-        where: { id: req.user.userId },
+    const dbUser = await prisma.user.findUnique({
+        where: { id: user.userId },
         select: { isVerified: true },
     });
 
-    if (!user) {
-        res.status(401).json({ error: 'Usuario no encontrado.' });
-        return;
+    if (!dbUser) {
+        return c.json({ error: 'Usuario no encontrado.' }, 401);
     }
 
-    if (!user.isVerified) {
-        res.status(403).json({ error: 'Debes verificar tu correo electrónico antes de acceder a este recurso.' });
-        return;
+    if (!dbUser.isVerified) {
+        return c.json({ error: 'Debes verificar tu correo electrónico antes de acceder a este recurso.' }, 403);
     }
 
-    next();
+    await next();
 }

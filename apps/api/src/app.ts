@@ -1,6 +1,6 @@
-import express from 'express';
-import cors from 'cors';
-import cookieParser from 'cookie-parser';
+import { Hono } from 'hono';
+import { cors } from 'hono/cors';
+import { logger } from 'hono/logger';
 import { env } from './config/env';
 import { authRouter } from './routes/auth';
 import { modelsRouter } from './routes/models';
@@ -8,7 +8,20 @@ import { chatRouter } from './routes/chat.router';
 import { conversationsRouter } from './routes/conversations';
 import { requireAuth, requireVerified } from './middleware/auth';
 
-const app = express();
+// ─── Tipos para Hono ──────────────────────────────────────────────────────────
+
+export type AppVariables = {
+    user: {
+        userId: string;
+        email: string;
+    };
+};
+
+export type AppEnv = {
+    Variables: AppVariables;
+};
+
+const app = new Hono<AppEnv>();
 
 // ─── Middlewares Globales ────────────────────────────────────────────────────
 
@@ -18,23 +31,13 @@ app.use(
         credentials: true,
     })
 );
-app.use(express.json());
-app.use(cookieParser());
 
-// ─── Request Logging ─────────────────────────────────────────────────────────
-
-app.use((req, res, next) => {
-    const start = Date.now();
-    res.on('finish', () => {
-        console.log(`[http] ${req.method} ${req.originalUrl} → ${res.statusCode} (${Date.now() - start}ms)`);
-    });
-    next();
-});
+app.use(logger());
 
 // ─── Ruta Pública: Info del Proyecto ─────────────────────────────────────────
 
-app.get('/', (req, res) => {
-    res.status(200).json({
+app.get('/', (c) => {
+    return c.json({
         name: 'nas-api',
         version: '1.0.0',
         description: 'API de streaming de Inteligencia Artificial para NAS',
@@ -44,19 +47,28 @@ app.get('/', (req, res) => {
 
 // ─── Rutas Públicas: Auth ────────────────────────────────────────────────────
 
-app.use('/api/auth', authRouter);
+app.route('/api/auth', authRouter);
 
 // ─── Rutas Protegidas: AI ────────────────────────────────────────────────────
 
-app.use('/api/models', requireAuth, requireVerified, modelsRouter);
-app.use('/api/chat', requireAuth, requireVerified, chatRouter);
-app.use('/api/conversations', requireAuth, requireVerified, conversationsRouter);
+app.use('/api/models/*', requireAuth, requireVerified);
+app.use('/api/chat/*', requireAuth, requireVerified);
+app.use('/api/conversations/*', requireAuth, requireVerified);
+
+// Also protect the exact paths (without trailing segments)
+app.use('/api/models', requireAuth, requireVerified);
+app.use('/api/chat', requireAuth, requireVerified);
+app.use('/api/conversations', requireAuth, requireVerified);
+
+app.route('/api/models', modelsRouter);
+app.route('/api/chat', chatRouter);
+app.route('/api/conversations', conversationsRouter);
 
 // ─── Error Handler Global ────────────────────────────────────────────────────
 
-app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+app.onError((err, c) => {
     console.error('[error]', err.stack || err.message || err);
-    res.status(500).json({ error: 'Error interno del servidor.' });
+    return c.json({ error: 'Error interno del servidor.' }, 500);
 });
 
 export { app };
