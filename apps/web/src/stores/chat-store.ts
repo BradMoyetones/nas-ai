@@ -1,10 +1,7 @@
 import { create } from 'zustand';
 
 import type { Message } from '@/types/models';
-
-import type {
-    MessageMetadata,
-} from '@/types/models';
+import type { MessageMetadata } from '@nas/shared';
 
 /**
  * Representación de un mensaje dentro del estado local

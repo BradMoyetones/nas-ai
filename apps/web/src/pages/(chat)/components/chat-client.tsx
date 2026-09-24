@@ -17,14 +17,13 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import type { Message, MessageMetadata } from '@/types/models';
-import type { AICategory } from '@/services/ai';
+import type { Message } from '@/types/models';
+import type { AICategory, ChatStreamEvent, MessageMetadata } from '@nas/shared';
 import type { ConversationWithMessages } from '@/services/conversation';
 import { useChatStore, emitConversationTitle, emitNewConversation } from '@/stores/chat-store';
 import { useAutoScroll } from '@/hooks/use-auto-scroll';
 import { fetchEventSource } from '@microsoft/fetch-event-source';
 import { Loader } from '@/components/loader';
-import type { ChatStreamEvent } from '@/services/ai/types';
 import { refreshAccessToken } from '@/lib/axios';
 import {
     identifyModel,

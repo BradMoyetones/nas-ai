@@ -1,6 +1,6 @@
 import type { Response } from 'express';
 
-import type { ChatStreamEvent } from './types';
+import type { ChatStreamEvent } from '@nas/shared';
 
 /**
  * Obtiene el tipo de data asociado a un evento SSE concreto.

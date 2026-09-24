@@ -1,18 +1,4 @@
-import type { AIProviderId } from './types';
-
-export interface AIModel {
-    id: string;
-    name: string;
-    description: string;
-    icon: string;
-    enabled: boolean;
-    provider: AIProviderId;
-}
-
-export interface AICategory {
-    category: string;
-    models: AIModel[];
-}
+import type { AIModel, AICategory } from '@nas/shared';
 
 export const modelCatalog: AICategory[] = [
     {

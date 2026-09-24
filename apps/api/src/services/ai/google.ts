@@ -5,7 +5,7 @@ import {
 
 import { env } from '../../config/env';
 
-import type { AIModel } from './providers';
+import type { AIModel } from '@nas/shared';
 
 import {
     ProviderApiError,

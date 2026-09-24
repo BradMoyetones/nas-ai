@@ -2,13 +2,12 @@ import { prisma } from '../db';
 
 import type { Conversation } from '@prisma/client';
 
+import type { AIProviderId, MessageMetadata } from '@nas/shared';
+
 import type {
     ChatRole,
-    MessageMetadata,
     StoredMessage,
 } from '@/types/message';
-
-import type { AIProviderId } from './ai/types';
 
 function parseChatRole(role: string): ChatRole {
     if (

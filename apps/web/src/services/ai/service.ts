@@ -1,19 +1,5 @@
 import type { AxiosInstance } from "axios";
-
-export interface AIModel {
-    id: string;
-    name: string;
-    description: string;
-    icon: string;
-    provider: 'openrouter' | 'groq' | 'cerebras' | 'google';
-    enabled: boolean;
-}
-
-export interface AICategory {
-    category: string;
-    models: AIModel[];
-}
-
+import type { AICategory } from "@nas/shared";
 
 export function createAIService(client: AxiosInstance) {
     return {

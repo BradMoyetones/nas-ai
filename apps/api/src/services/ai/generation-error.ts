@@ -1,18 +1,12 @@
 import type {
     GenerationErrorMetadata,
-} from '@/types/message';
-
-import type {
     AIModel,
-} from './providers';
+    AIProviderId,
+} from '@nas/shared';
 
 import {
     ProviderApiError,
 } from './provider-error';
-
-import type {
-    AIProviderId,
-} from './types';
 
 export type GenerationErrorCode =
     | 'ABORTED'

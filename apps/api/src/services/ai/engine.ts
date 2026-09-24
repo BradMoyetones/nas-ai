@@ -3,7 +3,7 @@ import type {
     ProviderStreamChunk,
 } from './types';
 
-import type { AIModel } from './providers';
+import type { AIModel } from '@nas/shared';
 
 import { streamFromOpenRouter } from './openrouter';
 import { streamFromGroq } from './groq';

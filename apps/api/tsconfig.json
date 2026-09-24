@@ -2,13 +2,10 @@
     "extends": "../../tsconfig.base.json",
     "compilerOptions": {
         "noImplicitAny": false,
+        "noEmit": true,
 
-        "rootDir": "./src",
-        "outDir": "./dist",
-
-        "baseUrl": ".",
         "paths": {
-            "@/*": ["src/*"],
+            "@/*": ["./src/*"],
             "@nas/shared": ["../../packages/shared/src/index.ts"],
             "@nas/shared/*": ["../../packages/shared/src/*"]
         },

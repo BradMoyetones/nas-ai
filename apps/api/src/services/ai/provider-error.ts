@@ -1,4 +1,4 @@
-import type { AIProviderId } from './types';
+import type { AIProviderId } from '@nas/shared';
 
 export class ProviderApiError extends Error {
     readonly provider: AIProviderId;

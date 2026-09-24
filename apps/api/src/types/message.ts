@@ -1,35 +1,13 @@
-import type { AIProviderId } from "@/services/ai/types";
+/**
+ * Tipos de mensajes persistidos (exclusivos del backend).
+ *
+ * Los tipos compartidos con el frontend viven en @nas/shared
+ * y deben importarse directamente desde allí.
+ */
+
+import type { MessageMetadata } from '@nas/shared';
 
 export type ChatRole = 'system' | 'user' | 'assistant';
-
-export type GenerationErrorMetadata = {
-    type: 'generation_error';
-
-    code: string;
-
-    provider: AIProviderId;
-    modelId: string;
-
-    status?: number;
-
-    retryable: boolean;
-
-    providerCode?: string;
-
-    /**
-     * Error técnico del proveedor.
-     * No debe mostrarse directamente al usuario.
-     */
-    technicalMessage?: string;
-
-    /**
-     * Identificador de request/traza del proveedor,
-     * cuando esté disponible.
-     */
-    requestId?: string;
-};
-
-export type MessageMetadata = GenerationErrorMetadata;
 
 /**
  * Mensaje almacenado en nuestra aplicación.
@@ -43,7 +21,7 @@ export type StoredMessage = {
 
     model: string | null;
 
-    provider: AIProviderId | null;
+    provider: string | null;
 
     metadata: MessageMetadata | null;
 

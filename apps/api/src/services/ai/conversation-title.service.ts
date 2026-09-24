@@ -1,6 +1,6 @@
 
 import { streamFromProvider } from './engine';
-import type { AIModel } from './providers';
+import type { AIModel } from '@nas/shared';
 import type { ChatMessage } from './types';
 
 interface GenerateConversationTitleParams {
