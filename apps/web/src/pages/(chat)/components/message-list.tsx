@@ -1,4 +1,5 @@
-import { UIMessage } from 'ai';
+import type { UIMessage } from 'ai';
+import { isTextUIPart, isReasoningUIPart } from 'ai';
 import { Message as MsgComponent, MessageContent, MessageResponse } from '@/components/ai-elements/message';
 import { Reasoning, ReasoningContent, ReasoningTrigger } from '@/components/ai-elements/reasoning';
 import { TypewriterPhrases } from '@/components/typewriter-phrases';
@@ -36,9 +37,9 @@ export function MessageList({ messages, isStreaming, isLoadingConversation }: Me
                         const isLastMessage = i === messages.length - 1;
                         const isLastAssistant = isLastMessage && m.role === 'assistant';
 
-                        const textParts = m.parts?.filter((p): p is { type: 'text'; text: string } => p.type === 'text') || [];
-                        const reasoningParts = m.parts?.filter((p) => p.type === 'reasoning') || [];
-                        
+                        const textParts = m.parts.filter(isTextUIPart);
+                        const reasoningParts = m.parts.filter(isReasoningUIPart);
+
                         const textContent = textParts.map(p => p.text).join('');
 
                         return (
@@ -49,13 +50,16 @@ export function MessageList({ messages, isStreaming, isLoadingConversation }: Me
                                     ) : (
                                         <>
                                             {reasoningParts.map((r, ri) => (
-                                                <Reasoning key={`reasoning-${ri}`} isStreaming={isStreaming && isLastAssistant && !textContent}>
+                                                <Reasoning
+                                                    key={`reasoning-${ri}`}
+                                                    isStreaming={isStreaming && isLastAssistant && !textContent}
+                                                    className='w-full'
+                                                >
                                                     <ReasoningTrigger />
-                                                    {/* @ts-expect-error AI SDK type part might vary depending on exact version */}
-                                                    <ReasoningContent>{(r as any).text || (r as any).reasoning || ''}</ReasoningContent>
+                                                    <ReasoningContent>{r.text}</ReasoningContent>
                                                 </Reasoning>
                                             ))}
-                                            {(textContent || textParts.length > 0 || reasoningParts.length === 0) && (
+                                            {(textContent || reasoningParts.length === 0) && (
                                                 <MessageResponse parseIncompleteMarkdown={isStreaming && isLastAssistant}>
                                                     {textContent || ' '}
                                                 </MessageResponse>

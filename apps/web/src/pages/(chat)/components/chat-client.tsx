@@ -145,7 +145,7 @@ export default function ChatClient({
             />
             <ChatInput 
                 onSubmit={handleSubmit}
-                isStreaming={isStreaming}
+                status={status}
                 onStop={stop}
                 selectedModel={selectedModel}
                 onModelChange={setSelectedModel}
