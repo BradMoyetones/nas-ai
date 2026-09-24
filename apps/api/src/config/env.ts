@@ -7,6 +7,7 @@ export const env = {
     HOST: process.env.HOST || '0.0.0.0',
     NODE_ENV: process.env.NODE_ENV || 'development',
     DATABASE_URL: process.env.DATABASE_URL || 'file:./dev.db',
+    ENCRYPTION_KEY: process.env.ENCRYPTION_KEY || '',
 
     // AI Providers
     OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY || '',

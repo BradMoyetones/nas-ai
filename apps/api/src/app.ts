@@ -6,6 +6,7 @@ import { authRouter } from './routes/auth';
 import { modelsRouter } from './routes/models';
 import { chatRouter } from './routes/chat.router';
 import { conversationsRouter } from './routes/conversations';
+import { credentialsRouter } from './routes/credentials';
 import { requireAuth, requireVerified } from './middleware/auth';
 
 // ─── Tipos para Hono ──────────────────────────────────────────────────────────
@@ -55,15 +56,18 @@ app.route('/api/auth', authRouter);
 app.use('/api/models/*', requireAuth, requireVerified);
 app.use('/api/chat/*', requireAuth, requireVerified);
 app.use('/api/conversations/*', requireAuth, requireVerified);
+app.use('/api/credentials/*', requireAuth, requireVerified);
 
 // Also protect the exact paths (without trailing segments)
 app.use('/api/models', requireAuth, requireVerified);
 app.use('/api/chat', requireAuth, requireVerified);
 app.use('/api/conversations', requireAuth, requireVerified);
+app.use('/api/credentials', requireAuth, requireVerified);
 
 app.route('/api/models', modelsRouter);
 app.route('/api/chat', chatRouter);
 app.route('/api/conversations', conversationsRouter);
+app.route('/api/credentials', credentialsRouter);
 
 // ─── Error Handler Global ────────────────────────────────────────────────────
 

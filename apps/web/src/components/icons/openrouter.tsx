@@ -1,7 +1,7 @@
 import type { SVGProps } from "react";
 
 const OpenRouter = (props: SVGProps<SVGSVGElement>) => (
-    <svg {...props} viewBox="0 0 512 512" fill="#ffff" stroke="#ffff">
+    <svg {...props} viewBox="0 0 512 512" fill="currentColor" stroke="currentColor">
         <g clipPath="url(#openrouter_dark__clip0_205_3)">
             <path
                 d="M3 248.945C18 248.945 76 236 106 219C136 202 136 202 198 158C276.497 102.293 332 120.945 423 120.945"

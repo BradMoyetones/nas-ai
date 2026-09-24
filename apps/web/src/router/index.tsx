@@ -11,6 +11,10 @@ import Register from "@/pages/(auth)/register/page"
 import VerifyEmailPage from "@/pages/(auth)/verify-email/page"
 import { ErrorBoundary } from "@/components/error-boundary"
 
+import Settings from "@/pages/(settings)"
+import ProvidersPage from "@/pages/(settings)/router/providers"
+import ProfilePage from "@/pages/(settings)/router/profile"
+
 function RouterErrorThrower(): React.ReactNode {
     const error = useRouteError();
 
@@ -38,6 +42,20 @@ const router = createBrowserRouter([
             {
                 index: true,
                 element: <Chat />,
+            },
+            {
+                path: 'settings',
+                element: <Settings />,
+                children: [
+                    {
+                        index: true,
+                        element: <ProfilePage />,
+                    },
+                    {
+                        path: 'api-keys',
+                        element: <ProvidersPage />,
+                    },
+                ],
             },
             {
                 path: ':conversationId',

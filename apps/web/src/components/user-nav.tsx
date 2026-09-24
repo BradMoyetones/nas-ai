@@ -10,7 +10,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/auth-context';
-import { User, LogOut } from 'lucide-react';
+import { User, LogOut, SettingsIcon } from 'lucide-react';
+import { Link } from 'react-router';
 
 export function UserNav() {
     const { user, logout } = useAuth();
@@ -37,6 +38,12 @@ export function UserNav() {
                 <DropdownMenuItem>
                     <User />
                     <span>Perfil</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                    <Link to="/settings" className="flex items-center gap-2 cursor-pointer w-full">
+                        <SettingsIcon />
+                        <span>Configuración</span>
+                    </Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={logout} variant="destructive">

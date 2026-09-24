@@ -101,7 +101,7 @@ export function ChatInput({
                                     </Button>
                                 </DropdownMenuTrigger>
 
-                                <DropdownMenuContent className="w-64 mb-2" align="start">
+                                <DropdownMenuContent className="max-w-96 w-full mb-2" align="start">
                                     <DropdownMenuRadioGroup
                                         value={selectedModel}
                                         onValueChange={onModelChange}

@@ -1,8 +1,10 @@
 import { Hono } from 'hono';
+import { chatMessageSchema } from '@nas/shared';
 import { streamText, createUIMessageStream, createUIMessageStreamResponse, toUIMessageStream } from 'ai';
 
 import { getModelById } from '../services/ai/model-discovery';
-import { resolveModel } from '../services/ai/provider-registry';
+import { resolveModelWithCredentials } from '../services/ai/provider-registry';
+import { credentialService } from '../services/credential.service';
 import { conversationService } from '../services/conversation.service';
 import { generateConversationTitle } from '../services/ai/conversation-title.service';
 import { normalizeGenerationError, generationErrorToMetadata, isAbortError } from '../services/ai/generation-error';
@@ -13,19 +15,17 @@ const chatRouter = new Hono<AppEnv>();
 chatRouter.post('/', async (c) => {
     const user = c.get('user');
 
-    let { content, conversationId, modelId } = await c.req.json();
+    const body = await c.req.json();
+    const parsed = chatMessageSchema.safeParse(body);
 
-    /*
-     * ============================================================
-     * Validaciones HTTP
-     * ============================================================
-     */
-
-    if (typeof content !== 'string' || content.trim() === '') {
+    if (!parsed.success) {
         return c.json({
-            error: 'content is required and must be a non-empty string.',
+            error: 'Datos de entrada inválidos',
+            details: parsed.error.issues,
         }, 400);
     }
+
+    let { content, conversationId, modelId } = parsed.data;
 
     const targetModelId = modelId || 'openai/gpt-oss-120b';
 
@@ -88,11 +88,20 @@ chatRouter.post('/', async (c) => {
 
     /*
      * ============================================================
-     * Resolver modelo del AI SDK
+     * Resolver modelo del AI SDK (con credenciales de usuario)
      * ============================================================
      */
 
-    const aiModel = resolveModel(selectedModel.provider, selectedModel.id);
+    const userApiKey = await credentialService.resolveApiKey(
+        user.userId,
+        selectedModel.provider,
+    );
+
+    const aiModel = resolveModelWithCredentials(
+        selectedModel.provider,
+        selectedModel.id,
+        userApiKey,
+    );
 
     /*
      * ============================================================

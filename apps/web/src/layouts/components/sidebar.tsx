@@ -14,7 +14,7 @@ import {
     useSidebar,
 } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
-import { Plus, MessageSquare, MoreHorizontal, Trash2, User, LogOut } from 'lucide-react';
+import { Plus, MessageSquare, MoreHorizontal, Trash2, User, LogOut, Settings as SettingsIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { apiClient, conversationService } from '@/lib/axios';
 import { Link, useLocation, useNavigate, useParams } from 'react-router';
@@ -144,7 +144,6 @@ export function AppSidebar() {
                                             </SidebarMenuAction>
                                         </DropdownMenuTrigger>
                                         <DropdownMenuContent
-                                            className="w-48 rounded-lg"
                                             side={isMobile ? 'bottom' : 'right'}
                                             align={isMobile ? 'end' : 'start'}
                                         >
@@ -196,6 +195,12 @@ export function AppSidebar() {
                                 <DropdownMenuItem>
                                     <User />
                                     <span>Perfil</span>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem asChild>
+                                    <Link to="/settings" className="flex items-center gap-2 cursor-pointer w-full">
+                                        <SettingsIcon />
+                                        <span>Configuración</span>
+                                    </Link>
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem onClick={logout} variant="destructive">

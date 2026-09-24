@@ -2,7 +2,10 @@
  * ProviderRegistry — Registro centralizado de proveedores AI SDK.
  *
  * Resuelve un AIProviderId + modelId → instancia de modelo del AI SDK.
- * Eliminó la necesidad de 4 archivos de proveedor manual (~1,800 líneas).
+ *
+ * Soporta dos fuentes de credenciales:
+ * 1. Credencial del usuario (cifrada en DB) — prioridad
+ * 2. Credencial del servidor (.env) — fallback
  */
 
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
@@ -11,118 +14,138 @@ import type { AIProviderId } from '@nas/shared';
 import type { LanguageModel } from 'ai';
 import { env } from '../../config/env';
 
-// ─── Instancias de proveedor ─────────────────────────────────────────────────
+// ─── Configuración de proveedores ────────────────────────────────────────────
 
-/**
- * Cada proveedor se crea lazily la primera vez que se necesita.
- * Esto evita errores si una API key no está configurada pero
- * el proveedor no se usa.
- */
+interface ProviderConfig {
+    name: string;
+    envKey: string;
+    factory: 'openai-compatible' | 'google';
+    baseURL?: string;
+}
 
-function createGroqProvider() {
-    return createOpenAICompatible({
+const PROVIDER_CONFIGS: Record<AIProviderId, ProviderConfig> = {
+    groq: {
         name: 'groq',
-        apiKey: env.GROQ_API_KEY,
+        envKey: 'GROQ_API_KEY',
+        factory: 'openai-compatible',
         baseURL: 'https://api.groq.com/openai/v1',
-    });
-}
-
-function createOpenRouterProvider() {
-    return createOpenAICompatible({
+    },
+    openrouter: {
         name: 'openrouter',
-        apiKey: env.OPENROUTER_API_KEY,
+        envKey: 'OPENROUTER_API_KEY',
+        factory: 'openai-compatible',
         baseURL: 'https://openrouter.ai/api/v1',
-    });
-}
-
-function createCerebrasProvider() {
-    return createOpenAICompatible({
+    },
+    cerebras: {
         name: 'cerebras',
-        apiKey: env.CEREBRAS_API_KEY,
+        envKey: 'CEREBRAS_API_KEY',
+        factory: 'openai-compatible',
         baseURL: 'https://api.cerebras.ai/v1',
-    });
+    },
+    google: {
+        name: 'google',
+        envKey: 'GEMINI_API_KEY',
+        factory: 'google',
+    },
+};
+
+// ─── Cache de instancias (por API key) ───────────────────────────────────────
+
+const providerCache = new Map<string, ReturnType<typeof createOpenAICompatible> | ReturnType<typeof createGoogleGenerativeAI>>();
+
+function getOrCreateProvider(
+    config: ProviderConfig,
+    apiKey: string,
+) {
+    const cacheKey = `${config.name}:${apiKey.slice(0, 8)}`;
+
+    let provider = providerCache.get(cacheKey);
+    if (provider) return provider;
+
+    if (config.factory === 'google') {
+        provider = createGoogleGenerativeAI({ apiKey });
+    } else {
+        provider = createOpenAICompatible({
+            name: config.name,
+            apiKey,
+            baseURL: config.baseURL!,
+        });
+    }
+
+    providerCache.set(cacheKey, provider);
+    return provider;
 }
 
-function createGoogleProvider() {
-    return createGoogleGenerativeAI({
-        apiKey: env.GEMINI_API_KEY,
-    });
+// ─── Resolución de API key ───────────────────────────────────────────────────
+
+function getServerApiKey(provider: AIProviderId): string {
+    switch (provider) {
+        case 'groq':
+            return env.GROQ_API_KEY;
+        case 'openrouter':
+            return env.OPENROUTER_API_KEY;
+        case 'cerebras':
+            return env.CEREBRAS_API_KEY;
+        case 'google':
+            return env.GEMINI_API_KEY;
+        default: {
+            const _exhaustive: never = provider;
+            throw new Error(`Unknown provider: ${_exhaustive}`);
+        }
+    }
 }
 
-// ─── Cache de instancias ─────────────────────────────────────────────────────
-
-let groq: ReturnType<typeof createOpenAICompatible> | null = null;
-let openrouter: ReturnType<typeof createOpenAICompatible> | null = null;
-let cerebras: ReturnType<typeof createOpenAICompatible> | null = null;
-let google: ReturnType<typeof createGoogleGenerativeAI> | null = null;
-
-function getGroq() {
-    if (!groq) groq = createGroqProvider();
-    return groq;
-}
-
-function getOpenRouter() {
-    if (!openrouter) openrouter = createOpenRouterProvider();
-    return openrouter;
-}
-
-function getCerebras() {
-    if (!cerebras) cerebras = createCerebrasProvider();
-    return cerebras;
-}
-
-function getGoogle() {
-    if (!google) google = createGoogleProvider();
-    return google;
-}
-
-// ─── Resolución de modelo ────────────────────────────────────────────────────
+// ─── API Pública ─────────────────────────────────────────────────────────────
 
 /**
- * Dado un providerId y un modelId, devuelve una instancia de
- * LanguageModelV1 del AI SDK lista para usar con streamText().
- *
- * @example
- * const model = resolveModel('groq', 'llama-3.1-8b-instant');
- * const result = streamText({ model, messages });
+ * Resuelve un modelo del AI SDK usando la API key del servidor.
+ * Para uso simple sin credenciales de usuario.
  */
 export function resolveModel(
     provider: AIProviderId,
     modelId: string,
 ): LanguageModel {
-    switch (provider) {
-        case 'groq':
-            return getGroq()(modelId);
-
-        case 'openrouter':
-            return getOpenRouter()(modelId);
-
-        case 'cerebras':
-            return getCerebras()(modelId);
-
-        case 'google':
-            return getGoogle()(modelId);
-
-        default: {
-            const _exhaustive: never = provider;
-            throw new Error(`Proveedor no soportado: ${_exhaustive}`);
-        }
+    const apiKey = getServerApiKey(provider);
+    if (!apiKey) {
+        throw new Error(`No API key configured for provider: ${provider}`);
     }
+
+    const config = PROVIDER_CONFIGS[provider];
+    const providerInstance = getOrCreateProvider(config, apiKey);
+    return providerInstance(modelId);
 }
 
-// ─── Utilidades de verificación ──────────────────────────────────────────────
+/**
+ * Resuelve un modelo del AI SDK con resolución de credenciales:
+ * 1. Si userApiKey es proporcionado → usar esa
+ * 2. Si no → usar la clave del servidor
+ *
+ * @param provider - ID del proveedor
+ * @param modelId - ID del modelo
+ * @param userApiKey - API key del usuario (opcional, ya descifrada)
+ */
+export function resolveModelWithCredentials(
+    provider: AIProviderId,
+    modelId: string,
+    userApiKey?: string | null,
+): LanguageModel {
+    const apiKey = userApiKey || getServerApiKey(provider);
 
-export function hasProviderKey(provider: AIProviderId): boolean {
-    switch (provider) {
-        case 'groq':
-            return !!env.GROQ_API_KEY;
-        case 'openrouter':
-            return !!env.OPENROUTER_API_KEY;
-        case 'cerebras':
-            return !!env.CEREBRAS_API_KEY;
-        case 'google':
-            return !!env.GEMINI_API_KEY;
-        default:
-            return false;
+    if (!apiKey) {
+        throw new Error(
+            `No API key available for provider "${provider}". ` +
+            `Configure a server key or add your own in Settings.`
+        );
     }
+
+    const config = PROVIDER_CONFIGS[provider];
+    const providerInstance = getOrCreateProvider(config, apiKey);
+    return providerInstance(modelId);
+}
+
+/**
+ * Verifica si hay una API key del servidor para un proveedor.
+ */
+export function hasProviderKey(provider: AIProviderId): boolean {
+    return !!getServerApiKey(provider);
 }
