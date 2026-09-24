@@ -46,6 +46,7 @@ chatRouter.post('/', async (c) => {
      */
 
     let isNewConversation = false;
+    let systemPrompt: string | null = null;
 
     if (conversationId) {
         const conversation = await conversationService.getByIdForUser(conversationId, userId);
@@ -55,11 +56,16 @@ chatRouter.post('/', async (c) => {
                 error: 'Conversation not found',
             }, 404);
         }
+        systemPrompt = conversation.systemPrompt;
     } else {
         const conversation = await conversationService.create(userId, 'New conversation');
 
         conversationId = conversation.id;
         isNewConversation = true;
+    }
+
+    if (!conversationId) {
+        return c.json({ error: 'Fallo al inicializar la conversación' }, 500);
     }
 
     /*
@@ -81,7 +87,15 @@ chatRouter.post('/', async (c) => {
 
     const history = await conversationService.getMessages(conversationId);
 
-    const messages = history.map((msg) => ({
+    /**
+     * Máximo de mensajes a enviar al modelo.
+     * Protege contra conversaciones muy largas que excedan
+     * la ventana de contexto del modelo.
+     */
+    const MAX_CONTEXT_MESSAGES = 50;
+    const recentHistory = history.slice(-MAX_CONTEXT_MESSAGES);
+
+    const messages = recentHistory.map((msg) => ({
         role: msg.role as 'user' | 'assistant' | 'system',
         content: msg.content,
     }));
@@ -144,7 +158,7 @@ chatRouter.post('/', async (c) => {
             try {
                 const result = streamText({
                     model: aiModel,
-                    system: 'You are a helpful AI assistant.',
+                    system: systemPrompt || 'You are a helpful AI assistant.',
                     messages,
                     abortSignal: abortController.signal,
                     onFinish: async ({ text, usage }) => {

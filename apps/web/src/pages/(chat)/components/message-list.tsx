@@ -38,6 +38,27 @@ function UsageFooter({ promptTokens, completionTokens, totalTokens, durationMs }
     );
 }
 
+interface MessageUsageMetadata {
+    promptTokens?: number;
+    completionTokens?: number;
+    totalTokens?: number;
+    reasoningTokens?: number;
+    durationMs?: number;
+}
+
+function getUsageMetadata(message: UIMessage): MessageUsageMetadata | undefined {
+    if (!message.metadata || typeof message.metadata !== 'object') return undefined;
+    const meta = message.metadata as Record<string, unknown>;
+    if (meta.totalTokens === undefined && meta.durationMs === undefined) return undefined;
+    return {
+        promptTokens: typeof meta.promptTokens === 'number' ? meta.promptTokens : undefined,
+        completionTokens: typeof meta.completionTokens === 'number' ? meta.completionTokens : undefined,
+        totalTokens: typeof meta.totalTokens === 'number' ? meta.totalTokens : undefined,
+        reasoningTokens: typeof meta.reasoningTokens === 'number' ? meta.reasoningTokens : undefined,
+        durationMs: typeof meta.durationMs === 'number' ? meta.durationMs : undefined,
+    };
+}
+
 interface MessageListProps {
     messages: UIMessage[];
     isStreaming: boolean;
@@ -79,6 +100,7 @@ export function MessageList({
                 const reasoningParts = m.parts.filter(isReasoningUIPart);
 
                 const textContent = textParts.map(p => p.text).join('');
+                const usage = m.role === 'assistant' ? getUsageMetadata(m) : undefined;
 
                 return (
                     <MsgComponent key={m.id || i} from={m.role}>
@@ -105,7 +127,7 @@ export function MessageList({
                                 </>
                             )}
                         </MessageContent>
-                        {m.role === 'assistant' && <UsageFooter />}
+                        {usage && <UsageFooter {...usage} />}
                     </MsgComponent>
                 );
             })}

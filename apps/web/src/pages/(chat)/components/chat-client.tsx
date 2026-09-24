@@ -12,6 +12,9 @@ import { DefaultChatTransport } from 'ai';
 import type { UIMessage } from 'ai';
 import { MessageList } from './message-list';
 import { ChatInput } from './chat-input';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { apiClient } from '@/lib/axios';
+import { ConversationConfig } from './conversation-config';
 
 interface ChatClientProps {
     conversationId?: string | null;
@@ -40,6 +43,25 @@ export default function ChatClient({
     useEffect(() => { conversationIdRef.current = conversationId; }, [conversationId]);
     useEffect(() => { selectedModelRef.current = selectedModel; }, [selectedModel]);
     useEffect(() => { navigateRef.current = navigate; }, [navigate]);
+
+    const queryClient = useQueryClient();
+    const { mutate: updateConfig, isPending: isUpdatingConfig } = useMutation({
+        mutationFn: async ({ id, systemPrompt, defaultModel }: { id: string, systemPrompt: string, defaultModel: string }) => {
+            const res = await apiClient.patch(`/api/conversations/${id}`, { systemPrompt, defaultModel });
+            return res.data;
+        },
+        onSuccess: () => {
+            if (conversationId) {
+                queryClient.invalidateQueries({ queryKey: ['conversation', conversationId] });
+            }
+            queryClient.invalidateQueries({ queryKey: ['conversations'] });
+        }
+    });
+
+    const handleSaveConfig = (systemPrompt: string, defaultModel: string) => {
+        if (!conversationId) return;
+        updateConfig({ id: conversationId, systemPrompt, defaultModel });
+    };
 
     /*
      * Scroll sentinel — vive DEBAJO del ChatInput (sticky)
@@ -131,6 +153,13 @@ export default function ChatClient({
                 role: msg.role as 'user' | 'assistant',
                 parts: [{ type: 'text' as const, text: msg.content }],
                 createdAt: new Date(msg.createdAt),
+                metadata: {
+                    promptTokens: msg.promptTokens ?? undefined,
+                    completionTokens: msg.completionTokens ?? undefined,
+                    totalTokens: msg.totalTokens ?? undefined,
+                    reasoningTokens: msg.reasoningTokens ?? undefined,
+                    durationMs: msg.durationMs ?? undefined,
+                },
             }));
 
             setMessages(uiMessages);
@@ -163,6 +192,18 @@ export default function ChatClient({
 
     return (
         <div className="relative flex-1 flex flex-col p-4 pb-0 max-w-4xl mx-auto w-full">
+            {conversationId && (
+                <div className="absolute top-4 right-4 z-10">
+                    <ConversationConfig
+                        conversationId={conversationId}
+                        currentSystemPrompt={initialConversation?.systemPrompt}
+                        currentDefaultModel={initialConversation?.defaultModel}
+                        modelsCategories={modelsCategories}
+                        onSave={handleSaveConfig}
+                        isSaving={isUpdatingConfig}
+                    />
+                </div>
+            )}
             <MessageList
                 messages={messages}
                 isStreaming={isStreaming}

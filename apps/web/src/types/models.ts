@@ -18,6 +18,8 @@ export interface Conversation {
     id: string;
     userId: string;
     title: string;
+    systemPrompt?: string | null;
+    defaultModel?: string | null;
     createdAt: string;
     updatedAt: string;
 }
@@ -41,4 +43,10 @@ export interface Message {
     provider: string | null;
     metadata: import('@nas/shared').MessageMetadata | null;
     createdAt: string;
+    // Tracking de uso
+    promptTokens?: number | null;
+    completionTokens?: number | null;
+    totalTokens?: number | null;
+    reasoningTokens?: number | null;
+    durationMs?: number | null;
 }

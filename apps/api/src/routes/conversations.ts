@@ -43,7 +43,7 @@ conversationsRouter.get('/', async (c) => {
         const nextCursor = hasMore ? items[items.length - 1].id : null;
 
         return c.json({ conversations: items, nextCursor });
-    } catch (error: any) {
+    } catch (error) {
         console.error('[conversations] GET / error:', error);
         return c.json({ error: 'Error al obtener conversaciones' }, 500);
     }
@@ -56,17 +56,32 @@ conversationsRouter.get('/:id', async (c) => {
         const user = c.get('user');
 
         const conversation = await prisma.conversation.findFirst({
-            where: {
-                id,
-                userId: user.userId
-            },
-            include: {
+            where: { id, userId: user.userId },
+            select: {
+                id: true,
+                title: true,
+                systemPrompt: true,
+                defaultModel: true,
+                createdAt: true,
+                updatedAt: true,
                 messages: {
-                    orderBy: {
-                        createdAt: 'asc'
-                    }
-                }
-            }
+                    orderBy: { createdAt: 'asc' },
+                    select: {
+                        id: true,
+                        role: true,
+                        content: true,
+                        model: true,
+                        provider: true,
+                        metadata: true,
+                        promptTokens: true,
+                        completionTokens: true,
+                        totalTokens: true,
+                        reasoningTokens: true,
+                        durationMs: true,
+                        createdAt: true,
+                    },
+                },
+            },
         });
 
         if (!conversation) {
@@ -74,7 +89,7 @@ conversationsRouter.get('/:id', async (c) => {
         }
 
         return c.json({ conversation });
-    } catch (error: any) {
+    } catch (error) {
         console.error(`[conversations] GET /${c.req.param('id')} error:`, error);
         return c.json({ error: 'Error al obtener conversación' }, 500);
     }
@@ -94,7 +109,7 @@ conversationsRouter.post('/', async (c) => {
         });
 
         return c.json({ conversation }, 201);
-    } catch (error: any) {
+    } catch (error) {
         console.error('[conversations] POST / error:', error);
         return c.json({ error: 'Error al crear conversación' }, 500);
     }
@@ -114,9 +129,46 @@ conversationsRouter.delete('/:id', async (c) => {
         });
 
         return c.json({ message: 'Conversación eliminada' });
-    } catch (error: any) {
+    } catch (error) {
         console.error(`[conversations] DELETE /${c.req.param('id')} error:`, error);
         return c.json({ error: 'Error al eliminar conversación' }, 500);
+    }
+});
+
+// ─── PATCH CONVERSATION ────────────────────────────────────────────
+conversationsRouter.patch('/:id', async (c) => {
+    try {
+        const id = c.req.param('id');
+        const user = c.get('user');
+        const body = await c.req.json();
+
+        const conversation = await prisma.conversation.findFirst({
+            where: { id, userId: user.userId },
+        });
+
+        if (!conversation) {
+            return c.json({ error: 'Conversación no encontrada' }, 404);
+        }
+
+        const updated = await prisma.conversation.update({
+            where: { id },
+            data: {
+                ...(body.title !== undefined ? { title: body.title } : {}),
+                ...(body.systemPrompt !== undefined ? { systemPrompt: body.systemPrompt } : {}),
+                ...(body.defaultModel !== undefined ? { defaultModel: body.defaultModel } : {}),
+            },
+            select: {
+                id: true,
+                title: true,
+                systemPrompt: true,
+                defaultModel: true,
+            },
+        });
+
+        return c.json({ conversation: updated });
+    } catch (error) {
+        console.error(`[conversations] PATCH /${c.req.param('id')} error:`, error);
+        return c.json({ error: 'Error al actualizar conversación' }, 500);
     }
 });
 
