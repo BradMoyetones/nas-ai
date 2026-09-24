@@ -1,10 +1,9 @@
 import { useState } from 'react';
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetDescription, SheetFooter } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from '@/components/ui/sheet';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Settings } from 'lucide-react';
 import type { AICategory } from '@nas/shared';
 
 interface ConversationConfigProps {
@@ -14,33 +13,30 @@ interface ConversationConfigProps {
     modelsCategories: AICategory[];
     onSave: (systemPrompt: string, defaultModel: string) => void;
     isSaving?: boolean;
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
 }
 
 export function ConversationConfig({
-    conversationId,
+    // conversationId,
     currentSystemPrompt,
     currentDefaultModel,
     modelsCategories,
     onSave,
-    isSaving
+    isSaving,
+    open,
+    onOpenChange
 }: ConversationConfigProps) {
-    const [isOpen, setIsOpen] = useState(false);
     const [systemPrompt, setSystemPrompt] = useState(currentSystemPrompt || '');
     const [defaultModel, setDefaultModel] = useState(currentDefaultModel || (modelsCategories[0]?.models[0]?.id || ''));
 
     const handleSave = () => {
         onSave(systemPrompt, defaultModel);
-        setIsOpen(false);
+        onOpenChange(false);
     };
 
     return (
-        <Sheet open={isOpen} onOpenChange={setIsOpen}>
-            <SheetTrigger asChild>
-                <Button variant="ghost" size="icon" className="shrink-0">
-                    <Settings className="size-4" />
-                    <span className="sr-only">Configuración de la conversación</span>
-                </Button>
-            </SheetTrigger>
+        <Sheet open={open} onOpenChange={onOpenChange}>
             <SheetContent>
                 <SheetHeader>
                     <SheetTitle>Configuración</SheetTitle>
@@ -48,7 +44,7 @@ export function ConversationConfig({
                         Ajusta el comportamiento del modelo para esta conversación.
                     </SheetDescription>
                 </SheetHeader>
-                <div className="grid gap-6 py-4">
+                <div className="grid gap-6 py-4 px-4">
                     <div className="grid gap-2">
                         <Label htmlFor="system-prompt">System Prompt</Label>
                         <Textarea
@@ -56,7 +52,7 @@ export function ConversationConfig({
                             value={systemPrompt}
                             onChange={(e) => setSystemPrompt(e.target.value)}
                             placeholder="Instrucciones para el asistente..."
-                            className="min-h-[150px] resize-none"
+                            className="min-h-37.5 resize-none"
                         />
                     </div>
                     <div className="grid gap-2">

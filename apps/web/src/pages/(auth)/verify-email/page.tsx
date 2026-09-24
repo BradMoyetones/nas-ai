@@ -45,7 +45,7 @@ function VerifyContent() {
     }, [token]);
 
     return (
-        <Card className="max-w-md w-full border-none shadow-none bg-transparent">
+        <Card className="max-w-md w-full border-none">
             <CardHeader className="text-center">
                 <CardTitle className="text-2xl font-bold flex justify-center mb-2">
                     {status === 'loading' && <Loader2 className="h-12 w-12 text-muted-foreground animate-spin" />}
@@ -73,7 +73,7 @@ function VerifyContent() {
 export default function VerifyEmailPage() {
     return (
         <div className="flex min-h-svh flex-col items-center justify-center bg-muted p-6 md:p-10">
-            <div className="w-full max-w-sm md:max-w-md flex flex-col items-center bg-background rounded-xl p-6 shadow-sm border">
+            <div className="w-full max-w-sm md:max-w-md flex flex-col items-center">
                 <Suspense fallback={<Loader />}>
                     <VerifyContent />
                 </Suspense>

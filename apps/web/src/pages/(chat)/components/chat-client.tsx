@@ -15,6 +15,8 @@ import { ChatInput } from './chat-input';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/axios';
 import { ConversationConfig } from './conversation-config';
+import { Button } from '@/components/ui/button';
+import { Settings } from 'lucide-react';
 
 interface ChatClientProps {
     conversationId?: string | null;
@@ -35,6 +37,7 @@ export default function ChatClient({
     const firstModelId = modelsCategories[0]?.models[0]?.id || 'openai/gpt-oss-120b';
     const [selectedModel, setSelectedModel] = useState<string>(firstModelId);
     const [conversationId, setConversationId] = useState<string | undefined>(initialConvId ?? undefined);
+    const [isConfigOpen, setIsConfigOpen] = useState(false);
 
     const conversationIdRef = useRef(conversationId);
     const selectedModelRef = useRef(selectedModel);
@@ -201,7 +204,11 @@ export default function ChatClient({
     return (
         <div className="relative flex-1 flex flex-col p-4 pb-0 max-w-4xl mx-auto w-full">
             {conversationId && (
-                <div className="absolute top-4 right-4 z-10">
+                <div className="absolute bottom-16 right-7 z-50">
+                    <Button variant="outline" size="icon-sm" className="shrink-0" onClick={() => setIsConfigOpen(true)}>
+                        <Settings className="size-4" />
+                        <span className="sr-only">Configuración de la conversación</span>
+                    </Button>
                     <ConversationConfig
                         conversationId={conversationId}
                         currentSystemPrompt={initialConversation?.systemPrompt}
@@ -209,6 +216,8 @@ export default function ChatClient({
                         modelsCategories={modelsCategories}
                         onSave={handleSaveConfig}
                         isSaving={isUpdatingConfig}
+                        open={isConfigOpen}
+                        onOpenChange={setIsConfigOpen}
                     />
                 </div>
             )}

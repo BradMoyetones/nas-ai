@@ -6,6 +6,8 @@
     "scripts": {
         "dev": "tsx watch src/index.ts",
         "start": "tsx src/index.ts",
+        "build": "tsc --noEmit",
+        "start:prod": "NODE_ENV=production tsx src/index.ts",
         "db:push": "prisma db push",
         "db:migrate": "prisma migrate dev",
         "db:migrate:reset": "prisma migrate reset",

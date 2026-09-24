@@ -1,20 +1,19 @@
 module.exports = {
     apps: [
         {
-            name: 'nas-api',
+            name: 'nas-web',
             cwd: __dirname,
             script: 'npx',
-            args: 'tsx src/index.ts',
-            node_args: '--max-old-space-size=512',
+            args: 'vite preview --host 0.0.0.0 --port 4173',
             env: {
                 NODE_ENV: 'production',
             },
             instances: 1,
             autorestart: true,
             watch: false,
-            max_memory_restart: '512M',
-            error_file: './logs/api-error.log',
-            out_file: './logs/api-out.log',
+            max_memory_restart: '256M',
+            error_file: './logs/web-error.log',
+            out_file: './logs/web-out.log',
             merge_logs: true,
             time: true,
         },

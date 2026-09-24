@@ -1,7 +1,7 @@
 'use client';
 
 import { cn } from 'cn';
-import { GalleryVerticalEnd, Loader2, CheckCircle2 } from 'lucide-react';
+import { Loader2, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Field, FieldDescription, FieldGroup, FieldLabel, FieldError } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
@@ -11,6 +11,7 @@ import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { authService } from '@/lib/axios';
 import { authRegisterSchema, type AuthRegisterFormValues } from '@/services/auth';
+import { Card, CardContent } from '@/components/ui/card';
 
 export function RegisterForm({ className, ...props }: React.ComponentProps<'div'>) {
     const [success, setSuccess] = useState(false);
@@ -50,99 +51,101 @@ export function RegisterForm({ className, ...props }: React.ComponentProps<'div'
     }
 
     return (
-        <div className={cn('flex flex-col gap-6', className)} {...props}>
-            <form onSubmit={form.handleSubmit(onSubmit)}>
-                <FieldGroup>
-                    <div className="flex flex-col items-center gap-2 text-center">
-                        <Link to="/" className="flex flex-col items-center gap-2 font-medium">
-                            <div className="flex size-8 items-center justify-center rounded-md">
-                                <GalleryVerticalEnd className="size-6" />
-                            </div>
-                            <span className="sr-only">NAS AI</span>
-                        </Link>
-                        <h1 className="text-xl font-bold">Crear Cuenta</h1>
-                        <FieldDescription>
-                            ¿Ya tienes una cuenta?{' '}
-                            <Link to="/login" className="underline">
-                                Inicia Sesión
+        <Card className={cn(className)} {...props}>
+            <CardContent>
+                <form onSubmit={form.handleSubmit(onSubmit)}>
+                    <FieldGroup>
+                        <div className="flex flex-col items-center gap-2 text-center">
+                            <Link to="/" className="flex flex-col items-center gap-2 font-medium">
+                                <div className="flex size-30 items-center justify-center rounded-md">
+                                    <img src="/img/logo.png" alt="" />
+                                </div>
+                                <span className="sr-only">NAS AI</span>
                             </Link>
-                        </FieldDescription>
-                    </div>
-
-                    {errorMsg && (
-                        <div className="bg-destructive/15 text-destructive text-sm p-3 rounded-md text-center">
-                            {errorMsg}
+                            <h1 className="text-xl font-bold">Crear Cuenta</h1>
+                            <FieldDescription>
+                                ¿Ya tienes una cuenta?{' '}
+                                <Link to="/login" className="underline">
+                                    Inicia Sesión
+                                </Link>
+                            </FieldDescription>
                         </div>
-                    )}
 
-                    <Controller
-                        name="username"
-                        control={form.control}
-                        render={({ field, fieldState }) => (
-                            <Field data-invalid={fieldState.invalid}>
-                                <FieldLabel htmlFor="username">Nombre de Usuario</FieldLabel>
-                                <Input
-                                    {...field}
-                                    id="username"
-                                    aria-invalid={fieldState.invalid}
-                                    type="text"
-                                    placeholder="johndoe"
-                                    autoComplete="off"
-                                />
-                                {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
-                            </Field>
+                        {errorMsg && (
+                            <div className="bg-destructive/15 text-destructive text-sm p-3 rounded-md text-center">
+                                {errorMsg}
+                            </div>
                         )}
-                    />
 
-                    <Controller
-                        name="email"
-                        control={form.control}
-                        render={({ field, fieldState }) => (
-                            <Field data-invalid={fieldState.invalid}>
-                                <FieldLabel htmlFor="email">Email</FieldLabel>
-                                <Input
-                                    {...field}
-                                    id="email"
-                                    aria-invalid={fieldState.invalid}
-                                    type="email"
-                                    placeholder="m@example.com"
-                                    autoComplete="off"
-                                />
-                                {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
-                            </Field>
-                        )}
-                    />
-
-                    <Controller
-                        name="password"
-                        control={form.control}
-                        render={({ field, fieldState }) => (
-                            <Field data-invalid={fieldState.invalid}>
-                                <FieldLabel htmlFor="password">Contraseña</FieldLabel>
-                                <Input
-                                    {...field}
-                                    id="password"
-                                    aria-invalid={fieldState.invalid}
-                                    type="password"
-                                    placeholder="********"
-                                    autoComplete="new-password"
-                                />
-                                {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
-                            </Field>
-                        )}
-                    />
-
-                    <Field>
-                        <Button type="submit" disabled={form.formState.isSubmitting}>
-                            {form.formState.isSubmitting ? (
-                                <Loader2 className="animate-spin h-4 w-4" />
-                            ) : (
-                                'Crear Cuenta'
+                        <Controller
+                            name="username"
+                            control={form.control}
+                            render={({ field, fieldState }) => (
+                                <Field data-invalid={fieldState.invalid}>
+                                    <FieldLabel htmlFor="username">Nombre de Usuario</FieldLabel>
+                                    <Input
+                                        {...field}
+                                        id="username"
+                                        aria-invalid={fieldState.invalid}
+                                        type="text"
+                                        placeholder="johndoe"
+                                        autoComplete="off"
+                                    />
+                                    {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                                </Field>
                             )}
-                        </Button>
-                    </Field>
-                </FieldGroup>
-            </form>
-        </div>
+                        />
+
+                        <Controller
+                            name="email"
+                            control={form.control}
+                            render={({ field, fieldState }) => (
+                                <Field data-invalid={fieldState.invalid}>
+                                    <FieldLabel htmlFor="email">Email</FieldLabel>
+                                    <Input
+                                        {...field}
+                                        id="email"
+                                        aria-invalid={fieldState.invalid}
+                                        type="email"
+                                        placeholder="m@example.com"
+                                        autoComplete="off"
+                                    />
+                                    {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                                </Field>
+                            )}
+                        />
+
+                        <Controller
+                            name="password"
+                            control={form.control}
+                            render={({ field, fieldState }) => (
+                                <Field data-invalid={fieldState.invalid}>
+                                    <FieldLabel htmlFor="password">Contraseña</FieldLabel>
+                                    <Input
+                                        {...field}
+                                        id="password"
+                                        aria-invalid={fieldState.invalid}
+                                        type="password"
+                                        placeholder="********"
+                                        autoComplete="new-password"
+                                    />
+                                    {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                                </Field>
+                            )}
+                        />
+
+                        <Field>
+                            <Button type="submit" disabled={form.formState.isSubmitting}>
+                                {form.formState.isSubmitting ? (
+                                    <Loader2 className="animate-spin h-4 w-4" />
+                                ) : (
+                                    'Crear Cuenta'
+                                )}
+                            </Button>
+                        </Field>
+                    </FieldGroup>
+                </form>
+            </CardContent>
+        </Card>
     );
 }
