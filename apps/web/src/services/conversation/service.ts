@@ -19,6 +19,10 @@ export function createConversationService(client: AxiosInstance) {
             const response = await client.post<{ conversation: Conversation }>(`/api/conversations`, { title });
             return response.data;
         },
+        update: async (data: { id: string, title: string, systemPrompt?: string, defaultModel?: string }) => {
+            const response = await client.patch<{ conversation: Conversation }>(`/api/conversations/${data.id}`, data);
+            return response.data;
+        },
         delete: async (id: string) => {
             const response = await client.delete<{ message: string }>(`/api/conversations/${id}`);
             return response.data;

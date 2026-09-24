@@ -14,7 +14,7 @@ import {
     useSidebar,
 } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
-import { Plus, MessageSquare, MoreHorizontal, Trash2, User, LogOut, Settings as SettingsIcon } from 'lucide-react';
+import { Plus, MessageSquare, MoreHorizontal, Trash2, User, LogOut, Settings as SettingsIcon, Pencil, Save } from 'lucide-react';
 import { useEffect, useState, useMemo, useRef } from 'react';
 import { apiClient, conversationService } from '@/lib/axios';
 import { Link, useLocation, useNavigate, useParams } from 'react-router';
@@ -43,6 +43,7 @@ export function AppSidebar() {
     const params = useParams();
     const navigate = useNavigate();
     const { user, logout } = useAuth();
+    const [editItem, setEditItem] = useState<Record<string, { title: string, isEditing?: boolean }>>({});
 
     // Debounce search
     useEffect(() => {
@@ -115,6 +116,18 @@ export function AppSidebar() {
         }
     });
 
+    const { mutateAsync: updateConversation } = useMutation({
+        mutationFn: (data: { id: string, title: string }) => conversationService.update(data),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['conversations'] });
+            toast.success('Conversación actualizada');
+            setEditItem({});
+        },
+        onError: () => {
+            toast.error('Error al actualizar conversación');
+        }
+    });
+
     return (
         <Sidebar>
             <SidebarHeader className="p-4">
@@ -151,10 +164,25 @@ export function AppSidebar() {
                                 {conversations.map((conv) => (
                                     <SidebarMenuItem key={conv.id}>
                                         <SidebarMenuButton asChild isActive={location.pathname === `/${conv.id}`}>
-                                            <Link to={`/${conv.id}`}>
-                                                <MessageSquare className="h-4 w-4 shrink-0" />
-                                                <span className="truncate">{conv.title}</span>
-                                            </Link>
+                                            {editItem[conv.id] ? (
+                                                <Input
+                                                    type="text"
+                                                    value={editItem[conv.id].title}
+                                                    onChange={(e) => setEditItem({ [conv.id]: { title: e.target.value } })}
+                                                    onBlur={() => setEditItem({})}
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === 'Enter') {
+                                                            setEditItem({})
+                                                        }
+                                                    }}
+                                                    autoFocus
+                                                />
+                                            ) : (
+                                                <Link to={`/${conv.id}`}>
+                                                    <MessageSquare />
+                                                    <span className="truncate">{conv.title}</span>
+                                                </Link>
+                                            )}
                                         </SidebarMenuButton>
                                         <DropdownMenu>
                                             <DropdownMenuTrigger asChild>
@@ -167,6 +195,10 @@ export function AppSidebar() {
                                                 side={isMobile ? 'bottom' : 'right'}
                                                 align={isMobile ? 'end' : 'start'}
                                             >
+                                                <DropdownMenuItem onClick={() => setEditItem({ [conv.id]: { title: conv.title } })}>
+                                                    <Pencil />
+                                                    <span>Cambiar nombre</span>
+                                                </DropdownMenuItem>
                                                 <DropdownMenuItem onClick={() => deleteConversation(conv.id)} variant='destructive'>
                                                     <Trash2 />
                                                     <span>Eliminar</span>
