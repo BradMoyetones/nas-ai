@@ -62,12 +62,12 @@ export function ConversationConfig({
                                 <SelectValue placeholder="Selecciona un modelo" />
                             </SelectTrigger>
                             <SelectContent>
-                                {modelsCategories.map(category => (
-                                    <div key={category.id} className="pt-2">
+                                {modelsCategories.map(cat => (
+                                    <div key={cat.category} className="pt-2">
                                         <div className="px-2 py-1.5 text-sm font-semibold text-muted-foreground">
-                                            {category.name}
+                                            {cat.category}
                                         </div>
-                                        {category.models.map(model => (
+                                        {cat.models.map(model => (
                                             <SelectItem key={model.id} value={model.id}>
                                                 {model.name}
                                             </SelectItem>
