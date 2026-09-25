@@ -1,4 +1,5 @@
 import type { AxiosInstance } from 'axios';
+import type { CredentialCreateFormValues } from './types';
 
 export interface ProviderCredentialInfo {
     id: string;
@@ -17,9 +18,9 @@ export function createCredentialService(client: AxiosInstance) {
             return data.credentials;
         },
 
-        async save(providerId: string, apiKey: string, label?: string): Promise<ProviderCredentialInfo> {
-            const { data } = await client.post('/api/credentials', { providerId, apiKey, label });
-            return data.credential;
+        async save(data: CredentialCreateFormValues): Promise<ProviderCredentialInfo> {
+            const res = await client.post('/api/credentials', data);
+            return res.data.credential;
         },
 
         async remove(providerId: string): Promise<void> {

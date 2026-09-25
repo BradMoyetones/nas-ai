@@ -9,7 +9,7 @@
  */
 
 // Proveedores
-export type { AIProviderId } from './providers';
+export type { AIProviderId, AIProvider } from './providers';
 
 // Modelos
 export type { AIModel, AICategory, ModelCapabilities, ModelPricing } from './models';

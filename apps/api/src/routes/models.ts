@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { getModelCatalog, getProviderModels } from '../services/ai/model-discovery';
+import { SUPPORTED_PROVIDER_IDS } from '../config/providers';
 import type { AppEnv } from '../app';
 import type { AIProviderId } from '@nas/shared';
 
@@ -33,8 +34,7 @@ modelsRouter.get('/:provider', async (c) => {
     const user = c.get('user');
 
     // Validación básica
-    const validProviders: AIProviderId[] = ['groq', 'openrouter', 'google', 'cerebras'];
-    if (!validProviders.includes(provider)) {
+    if (!SUPPORTED_PROVIDER_IDS.includes(provider)) {
         return c.json({ error: 'Proveedor no soportado' }, 400);
     }
 

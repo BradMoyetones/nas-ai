@@ -8,7 +8,7 @@
 import { OpenRouter } from '@openrouter/sdk';
 import type { Model } from '@openrouter/sdk/models/model';
 import type { AIModel } from '@nas/shared';
-import { PROVIDER_ENDPOINTS } from '../../../config/providers';
+import { PROVIDER_CONFIGS } from '../../../config/providers';
 
 /** Modelos excluidos (TTS, embeddings, etc) */
 const EXCLUDED_PATTERNS = ['tts', 'embedding', 'moderation', 'dall-e', 'whisper'];
@@ -57,7 +57,7 @@ function transformModel(m: Model): AIModel {
 }
 
 export async function fetchOpenRouterModels(apiKey: string): Promise<AIModel[]> {
-    const url = PROVIDER_ENDPOINTS.openrouter.modelsUrl;
+    const url = PROVIDER_CONFIGS.openrouter.modelsUrl;
     if (!url) throw new Error('modelsUrl not configured for openrouter');
 
     const response = await fetch(url, {

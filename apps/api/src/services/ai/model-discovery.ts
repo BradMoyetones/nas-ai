@@ -8,6 +8,7 @@
 import type { AIModel, AICategory, AIProviderId } from '@nas/shared';
 import { getServerApiKey } from './provider-registry';
 import { credentialService } from '../credential.service';
+import { PROVIDER_CONFIGS } from '../../config/providers';
 
 // Transformadores
 import { fetchOpenRouterModels } from './transformers/openrouter';
@@ -91,7 +92,10 @@ export async function getProviderModels(provider: AIProviderId, userId?: string)
  * consultando todos los proveedores configurados en paralelo.
  */
 export async function getModelCatalog(userId?: string): Promise<AICategory[]> {
-    const providers: AIProviderId[] = ['groq', 'openrouter', 'google'];
+    // Solo usamos los proveedores que tienen enableDiscovery = true
+    const providers = Object.values(PROVIDER_CONFIGS)
+        .filter(p => p.enableDiscovery)
+        .map(p => p.id);
     
     const results = await Promise.allSettled(
         providers.map(async (provider) => {
@@ -106,15 +110,8 @@ export async function getModelCatalog(userId?: string): Promise<AICategory[]> {
         if (result.status === 'fulfilled' && result.value.models.length > 0) {
             const { provider, models } = result.value;
             
-            const categoryName = {
-                groq: 'Groq',
-                openrouter: 'OpenRouter',
-                google: 'Google',
-                cerebras: 'Cerebras'
-            }[provider] || provider;
-            
             categories.push({
-                category: categoryName,
+                category: PROVIDER_CONFIGS[provider].name,
                 models,
             });
         }

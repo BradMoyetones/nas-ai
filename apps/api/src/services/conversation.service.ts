@@ -3,6 +3,7 @@ import { prisma } from '../db';
 import type { Conversation } from '@prisma/client';
 
 import type { AIProviderId, MessageMetadata } from '@nas/shared';
+import { SUPPORTED_PROVIDER_IDS } from '../config/providers';
 
 import type {
     ChatRole,
@@ -30,13 +31,8 @@ function parseProvider(
         return null;
     }
 
-    if (
-        provider === 'openrouter' ||
-        provider === 'groq' ||
-        provider === 'cerebras' ||
-        provider === 'google'
-    ) {
-        return provider;
+    if (SUPPORTED_PROVIDER_IDS.includes(provider as AIProviderId)) {
+        return provider as AIProviderId;
     }
 
     throw new Error(

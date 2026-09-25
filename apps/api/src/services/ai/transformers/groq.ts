@@ -13,7 +13,7 @@
  */
 
 import type { AIModel } from '@nas/shared';
-import { PROVIDER_ENDPOINTS } from '../../../config/providers';
+import { PROVIDER_CONFIGS } from '../../../config/providers';
 
 /** Forma real que devuelve la API de Groq (no tipada por el SDK) */
 interface GroqRawModel {
@@ -84,7 +84,7 @@ function formatId(id: string): string {
 }
 
 export async function fetchGroqModels(apiKey: string): Promise<AIModel[]> {
-    const url = PROVIDER_ENDPOINTS.groq.modelsUrl;
+    const url = PROVIDER_CONFIGS.groq.modelsUrl;
     if (!url) throw new Error('modelsUrl not configured for groq');
 
     const response = await fetch(url, {

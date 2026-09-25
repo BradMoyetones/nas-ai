@@ -2,6 +2,7 @@ import { createAIService } from "@/services/ai";
 import { createAuthService } from "@/services/auth/service";
 import { createConversationService } from "@/services/conversation";
 import { createCredentialService } from "@/services/credential/service";
+import { createProvidersService } from "@/services/providers/service";
 import axios from "axios";
 
 export const apiClient = axios.create({
@@ -65,3 +66,4 @@ export const authService = createAuthService(apiClient);
 export const aiService = createAIService(apiClient);
 export const conversationService = createConversationService(apiClient);
 export const credentialService = createCredentialService(apiClient);
+export const providersService = createProvidersService(apiClient);
