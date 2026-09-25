@@ -19,7 +19,7 @@ import {
 } from "./providers";
 
 export function resolveModelIcon(
-    model: ModelIconContext,
+    model: Partial<ModelIconContext>,
 ): ResolvedIcon {
 
     if (model.product) {
