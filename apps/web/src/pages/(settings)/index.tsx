@@ -10,9 +10,14 @@ import {
 } from "@/components/ui/select"
 import { Loader } from "@/components/loader";
 import { cn } from "cn";
-import { KeyIcon, UserIcon } from "lucide-react";
+import { KeyIcon, Settings, UserIcon } from "lucide-react";
 
 const ROUTES = [
+    {
+        icon: Settings,
+        title: "Settings",
+        href: "/settings",
+    },
     {
         icon: UserIcon,
         title: "Profile",
