@@ -8,8 +8,12 @@
  * 2. Credencial del servidor (.env) — fallback
  */
 
+// Providers
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
+import { createOpenRouter } from '@openrouter/ai-sdk-provider';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
+import { createGroq } from '@ai-sdk/groq';
+
 import type { AIProviderId } from '@nas/shared';
 import type { LanguageModel } from 'ai';
 import { env } from '../../config/env';
@@ -19,7 +23,7 @@ import { env } from '../../config/env';
 interface ProviderConfig {
     name: string;
     envKey: string;
-    factory: 'openai-compatible' | 'google';
+    factory: 'openai-compatible' | 'google' | 'groq' | 'openrouter';
     baseURL?: string;
 }
 
@@ -27,13 +31,13 @@ const PROVIDER_CONFIGS: Record<AIProviderId, ProviderConfig> = {
     groq: {
         name: 'groq',
         envKey: 'GROQ_API_KEY',
-        factory: 'openai-compatible',
+        factory: 'groq',
         baseURL: 'https://api.groq.com/openai/v1',
     },
     openrouter: {
         name: 'openrouter',
         envKey: 'OPENROUTER_API_KEY',
-        factory: 'openai-compatible',
+        factory: 'openrouter',
         baseURL: 'https://openrouter.ai/api/v1',
     },
     cerebras: {
@@ -51,7 +55,13 @@ const PROVIDER_CONFIGS: Record<AIProviderId, ProviderConfig> = {
 
 // ─── Cache de instancias (por API key) ───────────────────────────────────────
 
-const providerCache = new Map<string, ReturnType<typeof createOpenAICompatible> | ReturnType<typeof createGoogleGenerativeAI>>();
+const providerCache = new Map<
+    string,
+    ReturnType<typeof createOpenAICompatible> |
+    ReturnType<typeof createOpenRouter> |
+    ReturnType<typeof createGoogleGenerativeAI> |
+    ReturnType<typeof createGroq>
+>();
 
 function getOrCreateProvider(
     config: ProviderConfig,
@@ -62,14 +72,30 @@ function getOrCreateProvider(
     let provider = providerCache.get(cacheKey);
     if (provider) return provider;
 
-    if (config.factory === 'google') {
-        provider = createGoogleGenerativeAI({ apiKey });
-    } else {
-        provider = createOpenAICompatible({
-            name: config.name,
-            apiKey,
-            baseURL: config.baseURL!,
-        });
+    switch (config.factory) {
+        case 'google':
+            provider = createGoogleGenerativeAI({
+                apiKey,
+            });
+            break;
+        case 'groq':
+            provider = createGroq({
+                apiKey,
+                baseURL: config.baseURL,
+            });
+            break;
+        case 'openrouter':
+            provider = createOpenRouter({
+                apiKey,
+                baseURL: config.baseURL,
+            });
+            break;
+        default:
+            provider = createOpenAICompatible({
+                name: config.name,
+                apiKey,
+                baseURL: config.baseURL!,
+            });
     }
 
     providerCache.set(cacheKey, provider);

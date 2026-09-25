@@ -3,6 +3,15 @@ import { getModelCatalog } from '../services/ai/model-discovery';
 import { hasProviderKey } from '../services/ai/provider-registry';
 import { env } from '@/config/env';
 import type { AppEnv } from '../app';
+import Groq from 'groq-sdk';
+import { OpenRouter } from '@openrouter/sdk';
+import {GoogleGenAI} from "@google/genai";
+
+const groq = new Groq({ apiKey: env.GROQ_API_KEY });
+const openrouter = new OpenRouter({
+    apiKey: env.OPENROUTER_API_KEY,
+});
+const google = new GoogleGenAI({ apiKey: env.GEMINI_API_KEY });
 
 const modelsRouter = new Hono<AppEnv>();
 
@@ -27,19 +36,22 @@ modelsRouter.get('/groq', async (c) => {
         return c.json({ message: 'GROQ_API_KEY not configured' }, 400);
     }
 
-    const response = await fetch('https://api.groq.com/openai/v1/models', {
-        method: 'GET',
-        headers: {
-            Authorization: `Bearer ${env.GROQ_API_KEY}`,
-            'Content-Type': 'application/json',
-        },
-    });
+    const models = await groq.models.list();
 
-    if (!response.ok) {
-        return c.json({ message: 'Error al obtener modelos de Groq' }, 400);
-    }
+    models.data.map(data => data.id)
+    // const response = await fetch('https://api.groq.com/openai/v1/models', {
+    //     method: 'GET',
+    //     headers: {
+    //         Authorization: `Bearer ${env.GROQ_API_KEY}`,
+    //         'Content-Type': 'application/json',
+    //     },
+    // });
 
-    return c.json(await response.json());
+    // if (!response.ok) {
+    //     return c.json({ message: 'Error al obtener modelos de Groq' }, 400);
+    // }
+
+    return c.json(models);
 });
 
 /**
@@ -51,23 +63,24 @@ modelsRouter.get('/openrouter', async (c) => {
     if (!hasProviderKey('openrouter')) {
         return c.json({ message: 'OPENROUTER_API_KEY not configured' }, 400);
     }
+    const models = await openrouter.models.list({ offset: 0, limit: 100 });
 
-    const response = await fetch('https://openrouter.ai/api/v1/models', {
-        method: 'GET',
-        headers: {
-            Authorization: `Bearer ${env.OPENROUTER_API_KEY}`,
-            'Content-Type': 'application/json',
-        },
-    });
+    // const response = await fetch('https://openrouter.ai/api/v1/models', {
+    //     method: 'GET',
+    //     headers: {
+    //         Authorization: `Bearer ${env.OPENROUTER_API_KEY}`,
+    //         'Content-Type': 'application/json',
+    //     },
+    // });
 
-    if (!response.ok) {
-        return c.json({ message: 'Error al obtener modelos de OpenRouter' }, 400);
-    }
+    // if (!response.ok) {
+    //     return c.json({ message: 'Error al obtener modelos de OpenRouter' }, 400);
+    // }
 
-    const data = await response.json();
-    const filteredFreeModels = data.data.filter((model: { id: string }) => model.id.includes(':free'));
+    // const data = await response.json();
+    // const filteredFreeModels = data.data.filter((model: { id: string }) => model.id.includes(':free'));
 
-    return c.json(filteredFreeModels);
+    return c.json(models);
 });
 
 modelsRouter.get('/cerebras', (c) => {
@@ -77,11 +90,12 @@ modelsRouter.get('/cerebras', (c) => {
     return c.json({ ok: false });
 });
 
-modelsRouter.get('/google', (c) => {
+modelsRouter.get('/google', async (c) => {
     if (!hasProviderKey('google')) {
         return c.json({ message: 'GEMINI_API_KEY not configured' }, 400);
     }
-    return c.json({ message: 'Use the /api/models endpoint for the full catalog' });
+    const models = await google.models.list();
+    return c.json(models);
 });
 
 export { modelsRouter };

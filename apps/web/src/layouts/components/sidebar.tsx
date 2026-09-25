@@ -14,8 +14,8 @@ import {
     useSidebar,
 } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
-import { Plus, MessageSquare, MoreHorizontal, Trash2, User, LogOut, Settings as SettingsIcon, Pencil, Save } from 'lucide-react';
-import { useEffect, useState, useMemo, useRef } from 'react';
+import { Plus, MessageSquare, MoreHorizontal, Trash2, User, LogOut, Settings as SettingsIcon, Pencil, Check, X as XIcon, LoaderCircle } from 'lucide-react';
+import { useCallback, useEffect, useState, useMemo, useRef } from 'react';
 import { apiClient, conversationService } from '@/lib/axios';
 import { Link, useLocation, useNavigate, useParams } from 'react-router';
 import { Loader } from '@/components/loader';
@@ -43,7 +43,9 @@ export function AppSidebar() {
     const params = useParams();
     const navigate = useNavigate();
     const { user, logout } = useAuth();
-    const [editItem, setEditItem] = useState<Record<string, { title: string, isEditing?: boolean }>>({});
+    const [editingId, setEditingId] = useState<string | null>(null);
+    const [editTitle, setEditTitle] = useState('');
+    const editInputRef = useRef<HTMLInputElement>(null);;
 
     // Debounce search
     useEffect(() => {
@@ -116,17 +118,50 @@ export function AppSidebar() {
         }
     });
 
-    const { mutateAsync: updateConversation } = useMutation({
-        mutationFn: (data: { id: string, title: string }) => conversationService.update(data),
-        onSuccess: () => {
+    const { mutateAsync: renameConversation, isPending: isRenaming } = useMutation({
+        mutationFn: ({ id, title }: { id: string, title: string }) =>
+            apiClient.patch(`/api/conversations/${id}`, { title }),
+        onSuccess: (_, { id, title }) => {
+            useConversationStore.getState().updateTitle(id, title);
             queryClient.invalidateQueries({ queryKey: ['conversations'] });
-            toast.success('Conversación actualizada');
-            setEditItem({});
+            setEditingId(null);
         },
         onError: () => {
-            toast.error('Error al actualizar conversación');
+            toast.error('Error al renombrar conversación');
         }
     });
+
+    const startEditing = useCallback((conv: Conversation) => {
+        setEditingId(conv.id);
+        setEditTitle(conv.title);
+        // Focus + select after React renders the input
+        requestAnimationFrame(() => {
+            editInputRef.current?.focus();
+            editInputRef.current?.select();
+        });
+    }, []);
+
+    const cancelEditing = useCallback(() => {
+        if (isRenaming) return;
+        setEditingId(null);
+        setEditTitle('');
+    }, [isRenaming]);
+
+    const handleRename = useCallback(() => {
+        if (!editingId || isRenaming) return;
+        const trimmed = editTitle.trim();
+        if (!trimmed) {
+            cancelEditing();
+            return;
+        }
+        // Find the original title to avoid unnecessary API call
+        const original = conversations.find(c => c.id === editingId);
+        if (original && trimmed === original.title) {
+            cancelEditing();
+            return;
+        }
+        renameConversation({ id: editingId, title: trimmed });
+    }, [editingId, editTitle, isRenaming, conversations, renameConversation, cancelEditing]);
 
     return (
         <Sidebar>
@@ -161,52 +196,83 @@ export function AppSidebar() {
                             </div>
                         ) : (
                             <>
-                                {conversations.map((conv) => (
-                                    <SidebarMenuItem key={conv.id}>
-                                        <SidebarMenuButton asChild isActive={location.pathname === `/${conv.id}`}>
-                                            {editItem[conv.id] ? (
-                                                <Input
-                                                    type="text"
-                                                    value={editItem[conv.id].title}
-                                                    onChange={(e) => setEditItem({ [conv.id]: { title: e.target.value } })}
-                                                    onBlur={() => setEditItem({})}
-                                                    onKeyDown={(e) => {
-                                                        if (e.key === 'Enter') {
-                                                            setEditItem({})
-                                                        }
-                                                    }}
-                                                    autoFocus
-                                                />
+                                {conversations.map((conv) => {
+                                    const isEditing = editingId === conv.id;
+
+                                    return (
+                                        <SidebarMenuItem key={conv.id}>
+                                            {isEditing ? (
+                                                <div className="flex items-center gap-1">
+                                                    <Input
+                                                        ref={editInputRef}
+                                                        type="text"
+                                                        value={editTitle}
+                                                        onChange={(e) => setEditTitle(e.target.value)}
+                                                        onKeyDown={(e) => {
+                                                            if (e.key === 'Enter') handleRename();
+                                                            if (e.key === 'Escape') cancelEditing();
+                                                        }}
+                                                        onBlur={cancelEditing}
+                                                        disabled={isRenaming}
+                                                        className='h-9!'
+                                                    />
+                                                    <button
+                                                        type="button"
+                                                        onMouseDown={(e) => e.preventDefault()}
+                                                        onClick={handleRename}
+                                                        disabled={isRenaming}
+                                                        className="shrink-0 p-1 rounded-md hover:bg-sidebar-accent text-muted-foreground hover:text-foreground"
+                                                    >
+                                                        {isRenaming ? (
+                                                            <LoaderCircle className="size-3.5 animate-spin" />
+                                                        ) : (
+                                                            <Check className="size-3.5" />
+                                                        )}
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onMouseDown={(e) => e.preventDefault()}
+                                                        onClick={cancelEditing}
+                                                        disabled={isRenaming}
+                                                        className="shrink-0 p-1 rounded-md hover:bg-sidebar-accent text-muted-foreground hover:text-foreground"
+                                                    >
+                                                        <XIcon className="size-3.5" />
+                                                    </button>
+                                                </div>
                                             ) : (
-                                                <Link to={`/${conv.id}`}>
-                                                    <MessageSquare />
-                                                    <span className="truncate">{conv.title}</span>
-                                                </Link>
+                                                <>
+                                                    <SidebarMenuButton asChild isActive={location.pathname === `/${conv.id}`}>
+                                                        <Link to={`/${conv.id}`}>
+                                                            <MessageSquare className="shrink-0" />
+                                                            <span className="truncate">{conv.title}</span>
+                                                        </Link>
+                                                    </SidebarMenuButton>
+                                                    <DropdownMenu>
+                                                        <DropdownMenuTrigger asChild>
+                                                            <SidebarMenuAction showOnHover>
+                                                                <MoreHorizontal />
+                                                                <span className="sr-only">More</span>
+                                                            </SidebarMenuAction>
+                                                        </DropdownMenuTrigger>
+                                                        <DropdownMenuContent
+                                                            side={isMobile ? 'bottom' : 'right'}
+                                                            align={isMobile ? 'end' : 'start'}
+                                                        >
+                                                            <DropdownMenuItem onClick={() => startEditing(conv)}>
+                                                                <Pencil />
+                                                                <span>Cambiar nombre</span>
+                                                            </DropdownMenuItem>
+                                                            <DropdownMenuItem onClick={() => deleteConversation(conv.id)} variant='destructive'>
+                                                                <Trash2 />
+                                                                <span>Eliminar</span>
+                                                            </DropdownMenuItem>
+                                                        </DropdownMenuContent>
+                                                    </DropdownMenu>
+                                                </>
                                             )}
-                                        </SidebarMenuButton>
-                                        <DropdownMenu>
-                                            <DropdownMenuTrigger asChild>
-                                                <SidebarMenuAction showOnHover>
-                                                    <MoreHorizontal />
-                                                    <span className="sr-only">More</span>
-                                                </SidebarMenuAction>
-                                            </DropdownMenuTrigger>
-                                            <DropdownMenuContent
-                                                side={isMobile ? 'bottom' : 'right'}
-                                                align={isMobile ? 'end' : 'start'}
-                                            >
-                                                <DropdownMenuItem onClick={() => setEditItem({ [conv.id]: { title: conv.title } })}>
-                                                    <Pencil />
-                                                    <span>Cambiar nombre</span>
-                                                </DropdownMenuItem>
-                                                <DropdownMenuItem onClick={() => deleteConversation(conv.id)} variant='destructive'>
-                                                    <Trash2 />
-                                                    <span>Eliminar</span>
-                                                </DropdownMenuItem>
-                                            </DropdownMenuContent>
-                                        </DropdownMenu>
-                                    </SidebarMenuItem>
-                                ))}
+                                        </SidebarMenuItem>
+                                    );
+                                })}
                                 <div ref={loadMoreRef} className="h-4" />
                                 {isFetchingNextPage && (
                                     <div className="flex justify-center p-2">

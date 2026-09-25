@@ -21,7 +21,6 @@ export interface AIModel {
     id: string;
     name: string;
     description: string;
-    icon: string;
     enabled: boolean;
     provider: AIProviderId;
     capabilities?: ModelCapabilities;

@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { chatMessageSchema } from '@nas/shared';
-import { streamText, createUIMessageStream, createUIMessageStreamResponse, toUIMessageStream } from 'ai';
+import { streamText, createUIMessageStream, createUIMessageStreamResponse, toUIMessageStream, tool, isStepCount } from 'ai';
 
 import { getModelById } from '../services/ai/model-discovery';
 import { resolveModelWithCredentials } from '../services/ai/provider-registry';
@@ -9,6 +9,7 @@ import { conversationService } from '../services/conversation.service';
 import { generateConversationTitle } from '../services/ai/conversation-title.service';
 import { normalizeGenerationError, generationErrorToMetadata, isAbortError } from '../services/ai/generation-error';
 import type { AppEnv } from '../app';
+import z from 'zod';
 
 const chatRouter = new Hono<AppEnv>();
 
@@ -161,6 +162,21 @@ chatRouter.post('/', async (c) => {
                     system: systemPrompt || 'You are a helpful AI assistant.',
                     messages,
                     abortSignal: abortController.signal,
+                    tools: {
+                        getCurrentDateTime: tool({
+                            description: 'Returns the current date and time of the server',
+                            inputSchema: z.object({}),
+                            outputSchema: z.object({
+                                currentDateTime: z.string()
+                            }),
+                            execute: async ({}) => {
+                                return {
+                                    currentDateTime: new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' }),
+                                };
+                            },
+                        }),
+                    },
+                    stopWhen: isStepCount(5),
                     onFinish: async ({ text, usage }) => {
                         await conversationService.addMessage(conversationId, {
                             role: 'assistant',
