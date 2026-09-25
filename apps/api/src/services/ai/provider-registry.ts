@@ -12,6 +12,7 @@
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 import { createOpenRouter } from '@openrouter/ai-sdk-provider';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
+import { createCerebras } from '@ai-sdk/cerebras';
 import { createGroq } from '@ai-sdk/groq';
 
 import type { AIProviderId } from '@nas/shared';
@@ -23,7 +24,7 @@ import { env } from '../../config/env';
 interface ProviderConfig {
     name: string;
     envKey: string;
-    factory: 'openai-compatible' | 'google' | 'groq' | 'openrouter';
+    factory: 'openai-compatible' | 'google' | 'groq' | 'openrouter' | 'cerebras';
     baseURL?: string;
 }
 
@@ -43,7 +44,7 @@ const PROVIDER_CONFIGS: Record<AIProviderId, ProviderConfig> = {
     cerebras: {
         name: 'cerebras',
         envKey: 'CEREBRAS_API_KEY',
-        factory: 'openai-compatible',
+        factory: 'cerebras',
         baseURL: 'https://api.cerebras.ai/v1',
     },
     google: {
@@ -60,7 +61,8 @@ const providerCache = new Map<
     ReturnType<typeof createOpenAICompatible> |
     ReturnType<typeof createOpenRouter> |
     ReturnType<typeof createGoogleGenerativeAI> |
-    ReturnType<typeof createGroq>
+    ReturnType<typeof createGroq> |
+    ReturnType<typeof createCerebras>
 >();
 
 function getOrCreateProvider(
@@ -86,6 +88,12 @@ function getOrCreateProvider(
             break;
         case 'openrouter':
             provider = createOpenRouter({
+                apiKey,
+                baseURL: config.baseURL,
+            });
+            break;
+        case 'cerebras':
+            provider = createCerebras({
                 apiKey,
                 baseURL: config.baseURL,
             });

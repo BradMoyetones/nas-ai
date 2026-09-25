@@ -17,6 +17,7 @@
         "format:check": "prettier --check ."
     },
     "dependencies": {
+        "@ai-sdk/cerebras": "^3.0.55",
         "@ai-sdk/google": "^4.0.80",
         "@ai-sdk/groq": "^4.0.48",
         "@ai-sdk/openai-compatible": "^3.0.55",

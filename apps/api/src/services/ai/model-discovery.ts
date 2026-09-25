@@ -194,7 +194,7 @@ const MODEL_CAPABILITIES: Record<string, ModelCapabilities> = {
 function buildModelCatalog(): AICategory[] {
     const catalog: AICategory[] = [
         {
-            category: 'Groq (Ultra-Fast)',
+            category: 'Groq',
             models: [
                 {
                     id: 'openai/gpt-oss-120b',
@@ -215,28 +215,7 @@ function buildModelCatalog(): AICategory[] {
             ],
         },
         {
-            category: 'Cerebras (Lightning)',
-            models: [
-                {
-                    id: 'qwen-3.8-27b',
-                    name: 'Qwen 3.8 27B',
-                    description: 'Poder de 27B parámetros con chips Cerebras',
-                    provider: 'cerebras',
-                    enabled: false,
-                    capabilities: MODEL_CAPABILITIES['qwen-3.8-27b'],
-                },
-                {
-                    id: 'gpt-oss-120b',
-                    name: 'GPT OSS 120B',
-                    description: 'Modelo masivo Open Source en hardware Cerebras',
-                    provider: 'cerebras',
-                    enabled: false,
-                    capabilities: MODEL_CAPABILITIES['gpt-oss-120b'],
-                },
-            ],
-        },
-        {
-            category: 'OpenRouter (Multi-Provider)',
+            category: 'OpenRouter',
             models: [
                 {
                     id: 'openrouter/auto',
@@ -257,7 +236,7 @@ function buildModelCatalog(): AICategory[] {
             ],
         },
         {
-            category: 'Google AI',
+            category: 'Google',
             models: [
                 {
                     id: 'gemini-3.8-flash',
