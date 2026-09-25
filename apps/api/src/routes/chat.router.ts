@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { chatMessageSchema } from '@nas/shared';
 import { streamText, createUIMessageStream, createUIMessageStreamResponse, toUIMessageStream, tool, isStepCount } from 'ai';
 
-import { getModelById } from '../services/ai/model-discovery';
+import { findModel } from '../services/ai/model-discovery';
 import { resolveModelWithCredentials } from '../services/ai/provider-registry';
 import { credentialService } from '../services/credential.service';
 import { conversationService } from '../services/conversation.service';
@@ -30,7 +30,7 @@ chatRouter.post('/', async (c) => {
 
     const targetModelId = modelId || 'openai/gpt-oss-120b';
 
-    const selectedModel = getModelById(targetModelId);
+    const selectedModel = await findModel(targetModelId, user.userId);
 
     if (!selectedModel) {
         return c.json({

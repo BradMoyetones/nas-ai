@@ -18,6 +18,7 @@ import { createGroq } from '@ai-sdk/groq';
 import type { AIProviderId } from '@nas/shared';
 import type { LanguageModel } from 'ai';
 import { env } from '../../config/env';
+import { PROVIDER_ENDPOINTS } from '../../config/providers';
 
 // ─── Configuración de proveedores ────────────────────────────────────────────
 
@@ -33,19 +34,19 @@ const PROVIDER_CONFIGS: Record<AIProviderId, ProviderConfig> = {
         name: 'groq',
         envKey: 'GROQ_API_KEY',
         factory: 'groq',
-        baseURL: 'https://api.groq.com/openai/v1',
+        baseURL: PROVIDER_ENDPOINTS.groq.baseUrl,
     },
     openrouter: {
         name: 'openrouter',
         envKey: 'OPENROUTER_API_KEY',
         factory: 'openrouter',
-        baseURL: 'https://openrouter.ai/api/v1',
+        baseURL: PROVIDER_ENDPOINTS.openrouter.baseUrl,
     },
     cerebras: {
         name: 'cerebras',
         envKey: 'CEREBRAS_API_KEY',
         factory: 'cerebras',
-        baseURL: 'https://api.cerebras.ai/v1',
+        baseURL: PROVIDER_ENDPOINTS.cerebras.baseUrl,
     },
     google: {
         name: 'google',
@@ -112,7 +113,7 @@ function getOrCreateProvider(
 
 // ─── Resolución de API key ───────────────────────────────────────────────────
 
-function getServerApiKey(provider: AIProviderId): string {
+export function getServerApiKey(provider: AIProviderId): string {
     switch (provider) {
         case 'groq':
             return env.GROQ_API_KEY;

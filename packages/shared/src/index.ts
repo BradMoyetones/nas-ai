@@ -12,7 +12,7 @@
 export type { AIProviderId } from './providers';
 
 // Modelos
-export type { AIModel, AICategory, ModelCapabilities } from './models';
+export type { AIModel, AICategory, ModelCapabilities, ModelPricing } from './models';
 
 // Mensajes
 export type { GenerationErrorMetadata, MessageMetadata } from './messages';
