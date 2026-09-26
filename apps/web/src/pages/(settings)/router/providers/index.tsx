@@ -14,6 +14,8 @@ import type { ProviderCredentialInfo } from "@/services/credential"
 import type { AIProviderId } from "@nas/shared"
 import CreateApiKeyDialog from "./components/create"
 import { resolveModelIcon, type ModelIconContext, type ProviderId } from "@/components/icons/ai"
+import { toast } from "sonner"
+import { Loader } from "@/components/loader"
 
 function CredentialsPage() {
     const [dialogOpen, setDialogOpen] = useState(false)
@@ -54,16 +56,20 @@ function CredentialsPage() {
 
     const deleteMutation = useMutation({
         mutationFn: (id: string) => credentialService.remove(id),
-        onSuccess: () => {
+        onSuccess: (data) => {
             queryClient.invalidateQueries({ queryKey: ['credentials'] })
+            toast.success(data.message)
+        },
+        onError: (error) => {
+            toast.error(error.message)
         }
     })
 
     if (isLoading) {
         return (
-            <main className="flex w-full h-[50vh] items-center justify-center">
+            <main className="flex w-full flex-1 items-center justify-center">
                 <div className="flex flex-col items-center gap-2 text-muted-foreground">
-                    <Loader2 className="size-6 animate-spin" />
+                    <Loader />
                     <p className="text-sm">Cargando credenciales...</p>
                 </div>
             </main>
@@ -71,7 +77,7 @@ function CredentialsPage() {
     }
 
     return (
-        <main className="p-4 w-full space-y-4">
+        <main className="w-full space-y-4">
             <header className="flex items-start justify-between gap-4">
                 <div>
                     <h1 className="mt-1 text-xl font-semibold tracking-tight">Claves de API</h1>
@@ -116,7 +122,7 @@ function CredentialsPage() {
                                         <TableCell>
                                             <div className="flex items-center gap-2.5">
                                                 <div className="flex size-7 items-center justify-center rounded-md border bg-muted/50 text-[10px] font-semibold">
-                                                    <Icon />
+                                                    <Icon className="rounded-md" />
                                                 </div>
                                                 <span className="font-medium">{provider.name}</span>
                                             </div>

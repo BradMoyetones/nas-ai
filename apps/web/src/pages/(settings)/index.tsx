@@ -63,7 +63,7 @@ export default function SettingsPage() {
                     </SelectGroup>
                 </SelectContent>
             </Select>
-            <div className="flex flex-1">
+            <div className="flex flex-1 space-x-2">
                 <AsideContent>
                     {ROUTES.map((link) => (
                         <AsideItem
@@ -104,8 +104,12 @@ const AsideItem = ({ to, className, ...props }: React.ComponentProps<typeof Link
         <Link
             to={fullHref}
             className={cn(
-                "py-3 cursor-pointer pb-2 pr-0 text-sm font-medium leading-5 flex gap-2 items-center text-muted-foreground [&>svg]:size-5",
-                isActive ? "text-primary" : "",
+                "py-2 px-3 border-l-2 border-l-transparent rounded-r-lg transition-all duration-300 text-sm font-medium flex gap-2 items-center text-muted-foreground [&>svg]:size-5",
+                {
+                    "text-primary border-l-2 border-primary bg-muted": isActive,
+                    "hover:translate-x-2 ": !isActive
+
+                },
                 className
             )}
             {...props}

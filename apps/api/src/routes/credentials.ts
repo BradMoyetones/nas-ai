@@ -41,16 +41,15 @@ credentialsRouter.post('/', async (c) => {
 });
 
 /**
- * DELETE /api/credentials/:providerId
+ * DELETE /api/credentials/:id
  * Elimina una credencial.
  */
-credentialsRouter.delete('/:providerId', async (c) => {
-    const user = c.get('user');
-    const providerId = c.req.param('providerId');
+credentialsRouter.delete('/:id', async (c) => {
+    const id = c.req.param('id');
 
-    await credentialService.delete(user.userId, providerId);
+    await credentialService.delete(id);
 
-    return c.json({ ok: true });
+    return c.json({ message: 'Credencial eliminada correctamente' });
 });
 
 export { credentialsRouter };

@@ -74,7 +74,7 @@ export default function CreateApiKeyDialog({ open, onOpenChange, editing, onData
     }, [editing, form]);
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-110">
+            <DialogContent className="sm:max-w-110" showCloseButton={false}>
                 <DialogHeader>
                     <DialogTitle>{editing ? "Editar API Key" : "Añadir API Key"}</DialogTitle>
                     <DialogDescription>{editing ? "Actualiza la clave o cambia el nombre para identificarla." : "Selecciona un proveedor y registra una nueva credencial."}</DialogDescription>

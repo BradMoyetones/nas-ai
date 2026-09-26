@@ -144,7 +144,7 @@ export function ChatInput({
                                         <span className="text-sm">{currentModel?.name || 'Modelo'}</span>
                                     </Button>
                                 </ModelSelectorTrigger>
-                                <ModelSelectorContent title="Seleccionar modelo">
+                                <ModelSelectorContent title="Seleccionar modelo" showCloseButton={false}>
                                     <ModelSelectorInput placeholder="Buscar modelo..." />
                                     <ModelSelectorList>
                                         <ModelSelectorEmpty>No se encontraron modelos</ModelSelectorEmpty>

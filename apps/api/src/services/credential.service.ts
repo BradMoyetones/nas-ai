@@ -88,9 +88,9 @@ export const credentialService = {
     /**
      * Elimina una credencial.
      */
-    async delete(userId: string, providerId: string) {
-        return prisma.providerCredential.deleteMany({
-            where: { userId, providerId },
+    async delete(id: string) {
+        return prisma.providerCredential.delete({
+            where: { id },
         });
     },
 

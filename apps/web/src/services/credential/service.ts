@@ -23,8 +23,9 @@ export function createCredentialService(client: AxiosInstance) {
             return res.data.credential;
         },
 
-        async remove(providerId: string): Promise<void> {
-            await client.delete(`/api/credentials/${providerId}`);
+        async remove(id: string): Promise<{ message: string }> {
+            const res = await client.delete<{ message: string }>(`/api/credentials/${id}`);
+            return res.data;
         },
     } as const
 };
