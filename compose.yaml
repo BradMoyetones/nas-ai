@@ -49,10 +49,10 @@ services:
       NODE_OPTIONS: --max-old-space-size=512
 
     volumes:
-      - ./../data/api:/app/data
+      - ../data/api:/app/data
 
     ports:
-      - "127.0.0.1:3000:3000"
+      - "0.0.0.0:3000:3000"
 
     networks:
       - nas-ai-network
@@ -92,7 +92,7 @@ services:
     restart: unless-stopped
 
     ports:
-      - "127.0.0.1:8080:80"
+      - "0.0.0.0:8081:80"
 
     networks:
       - nas-ai-network

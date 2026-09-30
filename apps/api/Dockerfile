@@ -22,6 +22,8 @@ RUN pnpm install --frozen-lockfile
 
 COPY . .
 
+# Prisma 7 necesita que DATABASE_URL exista durante generate.
+# No necesita conectarse a la base en este paso.
 ENV DATABASE_URL=file:/tmp/database.sqlite
 
 RUN pnpm --filter @nas/api db:generate
@@ -32,7 +34,8 @@ FROM node:24.21.0-bookworm-slim AS runtime
 WORKDIR /app
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends openssl \
+    && apt-get install -y --no-install-recommends \
+        openssl \
     && rm -rf /var/lib/apt/lists/*
 
 RUN npm install -g pnpm@10.12.1
