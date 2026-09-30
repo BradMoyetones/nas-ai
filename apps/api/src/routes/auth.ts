@@ -13,7 +13,8 @@ const authRouter = new Hono<AppEnv>();
 
 const COOKIE_OPTIONS = {
     httpOnly: true,
-    secure: env.NODE_ENV === 'production',
+    // secure: env.NODE_ENV === 'production', // -> Se comenta porque los puertos no están en https
+    secure: false,
     sameSite: (env.NODE_ENV === 'production' ? 'None' : 'Lax') as 'None' | 'Lax',
     path: '/',
     ...(env.COOKIE_DOMAIN ? { domain: env.COOKIE_DOMAIN } : {}),
