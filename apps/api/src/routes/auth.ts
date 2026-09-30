@@ -15,7 +15,8 @@ const COOKIE_OPTIONS = {
     httpOnly: true,
     // secure: env.NODE_ENV === 'production', // -> Se comenta porque los puertos no están en https
     secure: false,
-    sameSite: (env.NODE_ENV === 'production' ? 'None' : 'Lax') as 'None' | 'Lax',
+    // sameSite: (env.NODE_ENV === 'production' ? 'None' : 'Lax') as 'None' | 'Lax',
+    sameSite: 'Lax' as const,
     path: '/',
     ...(env.COOKIE_DOMAIN ? { domain: env.COOKIE_DOMAIN } : {}),
 } as const;
@@ -209,7 +210,7 @@ authRouter.post('/login/verify', async (c) => {
     }
 
     if (challenge.usedAt) {
-        return c.json({ error: 'Este código ya fue utilizado.', hola: "mundo" }, 400);
+        return c.json({ error: 'Este código ya fue utilizado.' }, 400);
     }
 
     if (new Date() > challenge.expiresAt) {
