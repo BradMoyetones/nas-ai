@@ -7,7 +7,7 @@ services:
 
     build:
       context: .
-      dockerfile: infrastructure/repo/Dockerfile
+      dockerfile: Dockerfile
 
     container_name: nas-ai-repo
 
