@@ -10,6 +10,7 @@
         "start:prod": "NODE_ENV=production tsx src/index.ts",
         "db:push": "prisma db push",
         "db:migrate": "prisma migrate dev",
+        "db:migrate:deploy": "prisma migrate deploy",
         "db:migrate:reset": "prisma migrate reset",
         "db:studio": "prisma studio",
         "db:generate": "prisma generate",
