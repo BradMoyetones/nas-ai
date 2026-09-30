@@ -209,7 +209,7 @@ authRouter.post('/login/verify', async (c) => {
     }
 
     if (challenge.usedAt) {
-        return c.json({ error: 'Este código ya fue utilizado.' }, 400);
+        return c.json({ error: 'Este código ya fue utilizado.', hola: "mundo" }, 400);
     }
 
     if (new Date() > challenge.expiresAt) {
