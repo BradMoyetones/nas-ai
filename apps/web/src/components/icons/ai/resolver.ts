@@ -61,11 +61,11 @@ export function resolveModelIcon(
         }
     }
 
-    const provider = providers[model.provider];
+    const provider = providers[model.provider as keyof typeof providers];
 
     if (provider) {
         return {
-            component: iconRegistry[provider.icon],
+            component: iconRegistry[provider.icon as keyof typeof iconRegistry],
             key: provider.icon,
             source: "provider",
         };

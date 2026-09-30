@@ -16,7 +16,7 @@ import { Loader } from "@/components/loader";
 type Props = {
     open: boolean;
     onOpenChange: React.Dispatch<React.SetStateAction<boolean>>;
-    editing?: ProviderCredentialInfo;
+    editing: ProviderCredentialInfo | null;
     onDataSaved?: (credential: ProviderCredentialInfo) => void;
     providers: AIProvider[];
 };
@@ -124,6 +124,7 @@ export default function CreateApiKeyDialog({ open, onOpenChange, editing, onData
                                         id="label"
                                         placeholder={`${selectedProvider?.name || 'My API Key'}`}
                                         autoComplete="off"
+                                        value={field.value || ''}
                                     />
                                     {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
                                 </Field>

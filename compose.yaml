@@ -1,0 +1,123 @@
+name: nas-ai
+
+services:
+
+  repo:
+    image: alpine/git:v2.54.0
+    container_name: nas-ai-repo
+
+    restart: unless-stopped
+
+    user: "1028:100"
+
+    working_dir: /workspace
+
+    volumes:
+      - ./:/workspace
+
+    entrypoint:
+      - /bin/sh
+      - -c
+
+    command:
+      - |
+        while true; do
+          sleep 86400
+        done
+
+    stdin_open: true
+    tty: true
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "2"
+
+
+  api:
+    container_name: nas-ai-api
+
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+
+    restart: unless-stopped
+
+    env_file:
+      - .env
+
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      HOST: 0.0.0.0
+      NODE_OPTIONS: --max-old-space-size=512
+
+    volumes:
+      - ../data/api:/app/data
+
+    ports:
+      - "127.0.0.1:3000:3000"
+
+    networks:
+      - nas-ai-network
+
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "require('http').get('http://127.0.0.1:3000/health', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"
+
+
+  web:
+    container_name: nas-ai-web
+
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+
+      args:
+        VITE_API_URL: ${VITE_API_URL}
+
+    restart: unless-stopped
+
+    ports:
+      - "127.0.0.1:8080:80"
+
+    networks:
+      - nas-ai-network
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget -q --spider http://127.0.0.1/ || exit 1"
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+
+networks:
+  nas-ai-network:
+    driver: bridge

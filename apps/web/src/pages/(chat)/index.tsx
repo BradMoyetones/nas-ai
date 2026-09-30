@@ -27,7 +27,7 @@ export default function Chat() {
             try {
                 const res = await conversationService.getById(params.conversationId!);
                 return res;
-            } catch (error) {
+            } catch (error: any) {
                 console.log(error);
                 toast.error(error?.response?.data?.error || "No se pudo obtener la conversación");
                 navigate("/")

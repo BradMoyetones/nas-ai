@@ -48,6 +48,12 @@ app.get('/', (c) => {
     });
 });
 
+app.get('/health', (c) => {
+    return c.json({
+        ok: true,
+    })
+})
+
 // ─── Rutas Públicas: Auth ────────────────────────────────────────────────────
 
 app.route('/api/auth', authRouter);

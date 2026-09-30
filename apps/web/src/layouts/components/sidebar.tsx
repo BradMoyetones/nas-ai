@@ -295,12 +295,12 @@ export function AppSidebar() {
                                     className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
                                 >
                                     <Avatar className="h-8 w-8 rounded-lg">
-                                        <AvatarImage alt={user.username} />
-                                        <AvatarFallback className="rounded-lg">{user.username.slice(0, 2).toUpperCase()}</AvatarFallback>
+                                        <AvatarImage alt={user!.username} />
+                                        <AvatarFallback className="rounded-lg">{user!.username.slice(0, 2).toUpperCase()}</AvatarFallback>
                                     </Avatar>
                                     <div className="grid flex-1 text-left text-sm leading-tight">
-                                        <span className="truncate font-medium">{user.username}</span>
-                                        <span className="truncate text-xs">{user.email}</span>
+                                        <span className="truncate font-medium">{user!.username}</span>
+                                        <span className="truncate text-xs">{user!.email}</span>
                                     </div>
                                 </SidebarMenuButton>
                             </DropdownMenuTrigger>
@@ -312,8 +312,8 @@ export function AppSidebar() {
                             >
                                 <DropdownMenuLabel className="font-normal">
                                     <div className="flex flex-col space-y-1">
-                                        <p className="text-sm font-medium leading-none">{user.username}</p>
-                                        <p className="text-xs leading-none text-muted-foreground">{user.email}</p>
+                                        <p className="text-sm font-medium leading-none">{user!.username}</p>
+                                        <p className="text-xs leading-none text-muted-foreground">{user!.email}</p>
                                     </div>
                                 </DropdownMenuLabel>
                                 <DropdownMenuSeparator />
