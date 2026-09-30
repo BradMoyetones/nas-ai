@@ -29,7 +29,7 @@ const app = new Hono<AppEnv>();
 
 app.use(
     cors({
-        origin: env.FRONTEND_URL,
+        origin: "*",
         credentials: true,
         exposeHeaders: ['X-Conversation-Id', 'X-Is-New-Conversation'],
     })
