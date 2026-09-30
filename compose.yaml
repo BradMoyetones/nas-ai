@@ -3,27 +3,20 @@ name: nas-ai
 services:
 
   repo:
-    image: alpine/git:v2.54.0
+    image: nas-ai/repo:prod
+
+    build:
+      context: .
+      dockerfile: infrastructure/repo/Dockerfile
+
     container_name: nas-ai-repo
 
     restart: unless-stopped
-
-    user: "1028:100"
 
     working_dir: /workspace
 
     volumes:
       - ./:/workspace
-
-    entrypoint:
-      - /bin/sh
-      - -c
-
-    command:
-      - |
-        while true; do
-          sleep 86400
-        done
 
     stdin_open: true
     tty: true
@@ -36,11 +29,13 @@ services:
 
 
   api:
-    container_name: nas-ai-api
+    image: nas-ai/api:prod
 
     build:
       context: .
       dockerfile: apps/api/Dockerfile
+
+    container_name: nas-ai-api
 
     restart: unless-stopped
 
@@ -54,7 +49,7 @@ services:
       NODE_OPTIONS: --max-old-space-size=512
 
     volumes:
-      - ../data/api:/app/data
+      - ./../data/api:/app/data
 
     ports:
       - "127.0.0.1:3000:3000"
@@ -83,7 +78,7 @@ services:
 
 
   web:
-    container_name: nas-ai-web
+    image: nas-ai/web:prod
 
     build:
       context: .
@@ -91,6 +86,8 @@ services:
 
       args:
         VITE_API_URL: ${VITE_API_URL}
+
+    container_name: nas-ai-web
 
     restart: unless-stopped
 
