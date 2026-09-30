@@ -3,11 +3,7 @@ name: nas-ai
 services:
 
   repo:
-    image: nas-ai/repo:prod
-
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: node:latest
 
     container_name: nas-ai-repo
 
@@ -15,29 +11,63 @@ services:
 
     working_dir: /workspace
 
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      VITE_API_URL: ${VITE_API_URL}
+
     volumes:
       - ./:/workspace
+      - ../data/api:/app/data
+
+    entrypoint:
+      - /bin/bash
+      - -lc
+
+    command:
+      - |
+        set -e
+
+        if ! command -v git >/dev/null 2>&1; then
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            git \
+            ca-certificates \
+            openssl \
+            python3 \
+            make \
+            g++
+          rm -rf /var/lib/apt/lists/*
+        fi
+
+        if ! command -v pnpm >/dev/null 2>&1; then
+          npm install -g pnpm@10.12.1
+        fi
+
+        exec sleep infinity
 
     stdin_open: true
     tty: true
 
-    logging:
-      driver: json-file
-      options:
-        max-size: "5m"
-        max-file: "2"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "git --version >/dev/null 2>&1 && test -d /workspace/.git"
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
 
 
   api:
-    image: nas-ai/api:prod
-
-    build:
-      context: .
-      dockerfile: apps/api/Dockerfile
+    image: node:latest
 
     container_name: nas-ai-api
 
     restart: unless-stopped
+
+    working_dir: /workspace
 
     env_file:
       - .env
@@ -49,10 +79,25 @@ services:
       NODE_OPTIONS: --max-old-space-size=512
 
     volumes:
+      - ./:/workspace:ro
       - ../data/api:/app/data
 
     ports:
       - "0.0.0.0:3000:3000"
+
+    entrypoint:
+      - /bin/bash
+      - -lc
+
+    command:
+      - |
+        set -e
+
+        if ! command -v pnpm >/dev/null 2>&1; then
+          npm install -g pnpm@10.12.1
+        fi
+
+        exec pnpm --filter @nas/api start:prod
 
     networks:
       - nas-ai-network
@@ -78,18 +123,15 @@ services:
 
 
   web:
-    image: nas-ai/web:prod
-
-    build:
-      context: .
-      dockerfile: apps/web/Dockerfile
-
-      args:
-        VITE_API_URL: ${VITE_API_URL}
+    image: nginx:latest
 
     container_name: nas-ai-web
 
     restart: unless-stopped
+
+    volumes:
+      - ./apps/web/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./apps/web/dist:/usr/share/nginx/html:ro
 
     ports:
       - "0.0.0.0:8081:80"
@@ -100,8 +142,9 @@ services:
     healthcheck:
       test:
         [
-          "CMD-SHELL",
-          "wget -q --spider http://127.0.0.1/ || exit 1"
+          "CMD",
+          "nginx",
+          "-t"
         ]
       interval: 30s
       timeout: 5s
